@@ -52,11 +52,6 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
         string SubscriptionId { get; set; }
 
         /// <summary>
-        /// Client API version.
-        /// </summary>
-        string ApiVersion { get; }
-
-        /// <summary>
         /// The preferred language for the response.
         /// </summary>
         string AcceptLanguage { get; set; }
@@ -84,6 +79,11 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
         /// Gets the IPublicIPAddressesOperations.
         /// </summary>
         IPublicIPAddressesOperations PublicIPAddresses { get; }
+
+        /// <summary>
+        /// Gets the IBastionHostsOperations.
+        /// </summary>
+        IBastionHostsOperations BastionHosts { get; }
 
     }
 }

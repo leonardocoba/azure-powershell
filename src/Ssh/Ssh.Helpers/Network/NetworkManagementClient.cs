@@ -58,11 +58,6 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
         public string SubscriptionId { get; set; }
 
         /// <summary>
-        /// Client API version.
-        /// </summary>
-        public string ApiVersion { get; private set; }
-
-        /// <summary>
         /// The preferred language for the response.
         /// </summary>
         public string AcceptLanguage { get; set; }
@@ -89,6 +84,11 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
         /// Gets the IPublicIPAddressesOperations.
         /// </summary>
         public virtual IPublicIPAddressesOperations PublicIPAddresses { get; private set; }
+
+        /// <summary>
+        /// Gets the IBastionHostsOperations.
+        /// </summary>
+        public virtual IBastionHostsOperations BastionHosts { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the NetworkManagementClient class.
@@ -333,8 +333,8 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
         {
             NetworkInterfaces = new NetworkInterfacesOperations(this);
             PublicIPAddresses = new PublicIPAddressesOperations(this);
+            BastionHosts = new BastionHostsOperations(this);
             BaseUri = new System.Uri("https://management.azure.com");
-            ApiVersion = "2022-09-01";
             AcceptLanguage = "en-US";
             LongRunningOperationRetryTimeout = 30;
             GenerateClientRequestId = true;

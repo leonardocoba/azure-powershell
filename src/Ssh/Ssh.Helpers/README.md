@@ -126,7 +126,7 @@ directive:
 input-file:
   - https://github.com/Azure/azure-rest-api-specs/blob/0981d741705c4dcc72efb1e3a39dbe9124c84d83/specification/network/resource-manager/Microsoft.Network/stable/2022-09-01/networkInterface.json
   - https://github.com/Azure/azure-rest-api-specs/blob/0981d741705c4dcc72efb1e3a39dbe9124c84d83/specification/network/resource-manager/Microsoft.Network/stable/2022-09-01/publicIpAddress.json
-
+  - https://github.com/Azure/azure-rest-api-specs/blob/c142d613ea72dcc1251a5d4402147f13afc01f2a/specification/network/resource-manager/Microsoft.Network/stable/2024-01-01/bastionHost.json
 output-folder: Network
 
 namespace: Microsoft.Azure.PowerShell.Ssh.Helpers.Network
@@ -155,4 +155,16 @@ directive:
     - PublicIPAddresses_ListAll
     - PublicIPAddresses_List
     - PublicIPAddresses_DdosProtectionStatus
+    - BastionHosts_Delete
+#    - BastionHosts_Get
+#    - BastionHosts_CreateOrUpdate
+    - BastionHosts_UpdateTags
+    - BastionHosts_List
+    - BastionHosts_ListByResourceGroup
+    - PutBastionShareableLink
+    - DeleteBastionShareableLink
+    - DeleteBastionShareableLinkByToken
+    - GetBastionShareableLink
+    - GetActiveSessions
+    - DisconnectActiveSessions
 ```

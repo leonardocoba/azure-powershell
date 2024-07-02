@@ -19,6 +19,7 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
           {
               return new Tuple<string, string, string>[]
               {
+                new Tuple<string, string, string>("Network", "BastionHosts", "2024-01-01"),
                 new Tuple<string, string, string>("Network", "NetworkInterfaces", "2022-09-01"),
                 new Tuple<string, string, string>("Network", "PublicIPAddresses", "2022-09-01"),
               }.AsEnumerable();
