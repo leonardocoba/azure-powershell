@@ -336,6 +336,16 @@ namespace Microsoft.Azure.Commands.Ssh
         [ValidateNotNullOrEmpty]
         public virtual SwitchParameter Rdp { get; set; }
 
+        /// <summary>
+        /// Specifies whether to connect to a VM using a Developer Bastion.
+        /// </summary>
+        [Parameter(ParameterSetName = InteractiveParameterSet)]
+        [Parameter(ParameterSetName = IpAddressParameterSet)]
+        [Parameter(ParameterSetName = ResourceIdParameterSet)]
+        [ValidateNotNullOrEmpty]
+        public SwitchParameter Bastion { get; set; }
+
+
         [Parameter(Mandatory = false)]
         public virtual SwitchParameter PassThru { get; set; }
 
@@ -448,6 +458,14 @@ namespace Microsoft.Azure.Commands.Ssh
                 throw new AzPSResourceNotFoundCloudException(String.Format(Resources.ResourceNotFoundNoTypeProvided, Name, ResourceGroupName));
             }
             ResourceType = types.ElementAt(0);
+        }
+
+        protected void CheckForBastionConnection()
+        {
+            if (Bastion.IsPresent)
+            {
+                BastionUtils.HandleBastionProperties(ResourceGroupName, Name, DefaultProfile.DefaultContext);
+            }
         }
 
         protected internal void UpdateProgressBar(

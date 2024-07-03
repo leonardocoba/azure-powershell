@@ -89,6 +89,7 @@ namespace Microsoft.Azure.Commands.Ssh
 
             ValidateParameters();
             SetResourceType();
+            CheckForBastionConnection();
  
             record = new ProgressRecord(0, "Preparing for SSH connection", "Initiating connection setup");
             UpdateProgressBar(record, "Setup SSH connection", 0);
