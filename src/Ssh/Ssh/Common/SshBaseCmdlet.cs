@@ -464,7 +464,8 @@ namespace Microsoft.Azure.Commands.Ssh
         {
             if (Bastion.IsPresent)
             {
-                BastionUtils.HandleBastionProperties(ResourceGroupName, Name, DefaultProfile.DefaultContext);
+                BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
+                bastionUtils.HandleBastionProperties(ResourceGroupName, Name, DefaultProfile.DefaultContext);
             }
         }
 
