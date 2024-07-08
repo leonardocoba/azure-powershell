@@ -71,7 +71,7 @@ namespace Microsoft.Azure.Commands.Ssh
         {
             Console.WriteLine("Handling Bastion Properties");
             string vm = "north-europe-vm-vnet-bastion";
-            string rsgroup = "north-europe-vm-vnet-bastion";
+            string rsgroup = "Bastion-Dev-Testing-vm-vnet-bastion";
             BastionHost bastion = null;
 
             try
@@ -114,7 +114,7 @@ namespace Microsoft.Azure.Commands.Ssh
 
             if (bastion == null)
             {
-                CreateDeveloperBastion(resourceGroupName, bastionName);
+                CreateDeveloperBastion(resourceGroupName, rsgroup);
                 Console.WriteLine("Bastion created.");
             }
 
@@ -144,41 +144,44 @@ namespace Microsoft.Azure.Commands.Ssh
 
         public BastionHost CreateDeveloperBastion(string resourceGroupName, string bastionName)
         {
-            var bastionProperties = new
+            var virtualNetwork = new SubResource
             {
-                ipConfigurations = new List<object>(), // Empty list for IP configurations
-                dnsName = "omnibrain.northeurope.bastionglobal.azure.com",
-                virtualNetwork = new
-                {
-                    id = "/subscriptions/f02fce97-0b41-4430-9823-6c1545921419/resourceGroups/Bastion-Dev-Testing/providers/Microsoft.Network/virtualNetworks/north-europe-vm-vnet"
-                },
-                scaleUnits = 2,
-                disableCopyPaste = (object)null,
-                enableFileCopy = (object)null,
-                enableIpConnect = (object)null,
-                enableShareableLink = (object)null,
-                enableTunneling = (object)null,
-                enableKerberos = (object)null,
-                enableSessionRecording = (object)null,
-                sku = new { name = "Developer" }
+                Id = "/subscriptions/f02fce97-0b41-4430-9823-6c1545921419/resourceGroups/Bastion-Dev-Testing/providers/Microsoft.Network/virtualNetworks/north-europe-vm-vnet"
             };
 
-            var bastion = new
+            var sku = new Sku
             {
-                properties = bastionProperties,
-                id = "/subscriptions/f02fce97-0b41-4430-9823-6c1545921419/resourceGroups/Bastion-Dev-Testing/providers/Microsoft.Network/bastionHosts/north-europe-vm-vnet-bastion",
-                name = "north-europe-vm-vnet-bastion",
-                type = "Microsoft.Network/bastionHosts",
-                location = "northeurope",
-                tags = new Dictionary<string, string>()
+                Name = "Developer"
             };
 
-            // Map to the SDK object
-            var bastionModel = NetworkResourceManagerProfile.Mapper.Map<BastionHost>(bastion);
+            var bastion = new BastionHost
+            {
+                Location = "northeurope",
+                IpConfigurations = new List<BastionHostIPConfiguration>(), 
+                VirtualNetwork = virtualNetwork,
+                ScaleUnits = 2,
+                DisableCopyPaste = null,
+                EnableFileCopy = null,
+                EnableIpConnect = null,
+                EnableShareableLink = null,
+                EnableTunneling = null,
+                EnableKerberos = null,
+                EnableSessionRecording = null,                
+                Sku = sku,
+                Tags = new Dictionary<string, string>()
+            };
 
             // Execute the Create bastion call
-            this.BastionClient.CreateOrUpdate(resourceGroupName, bastionName, bastionModel);
+            try
+            {
+                this.BastionClient.CreateOrUpdate(resourceGroupName, bastionName, bastion);
 
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating bastion: {ex.Message}");
+                throw;
+            }
             // Return the created bastion
             return this.BastionClient.Get(resourceGroupName, bastionName);
         }

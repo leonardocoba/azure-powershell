@@ -482,7 +482,7 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal EndpointAccessResource GetRelayInformation()
         {
             SetResourceId();
-            EndpointAccessResource cred;
+            EndpointAccessResource cred;  
 
             try
             {
