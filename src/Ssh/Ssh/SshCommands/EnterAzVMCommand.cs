@@ -25,8 +25,8 @@ using System.Threading;
 using System.Text.RegularExpressions;
 using Microsoft.Azure.Commands.Ssh.Properties;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity.Models;
-using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
 
+using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01.Models;
 namespace Microsoft.Azure.Commands.Ssh
 {
     [Cmdlet(
@@ -88,8 +88,8 @@ namespace Microsoft.Azure.Commands.Ssh
             base.ExecuteCmdlet();
 
             ValidateParameters();
-            SetResourceType();
-            CheckForBastionConnection();
+            GenericResource targetResource = GetTargetResourceAndSetResourceType();
+            CheckForBastionConnection(targetResource);
  
             record = new ProgressRecord(0, "Preparing for SSH connection", "Initiating connection setup");
             UpdateProgressBar(record, "Setup SSH connection", 0);

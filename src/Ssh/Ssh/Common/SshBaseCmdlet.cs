@@ -43,6 +43,7 @@ using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity;
 using System.Management.Automation.Runspaces;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute.Models;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute;
+using System.Reflection;
 
 
 namespace Microsoft.Azure.Commands.Ssh
@@ -406,30 +407,32 @@ namespace Microsoft.Azure.Commands.Ssh
 
         }
 
-        protected internal void SetResourceType()
+        protected internal GenericResource GetTargetResourceAndSetResourceType()
         {
             if (ParameterSetName.Equals(IpAddressParameterSet))
             {
                 ResourceType = "Microsoft.Compute/virtualMachines";
-                return;
+                return null;
             }
             if (ParameterSetName.Equals(ResourceIdParameterSet))
             {
                 ResourceIdentifier idParser = new ResourceIdentifier(ResourceId);
-                ResourceGroupName = idParser.ResourceGroupName;
+                ResourceGroupName = idParser.ResourceGroupName; 
                 Name = idParser.ResourceName;
                 ResourceType = idParser.ResourceType;
             }
 
             var resourcetypefilter = supportedResourceTypes.Select(type => $"resourceType eq '{type}'").ToArray();
-            String filter = $"$filter=name eq '{Name}' and ({String.Join(" or ", resourcetypefilter)})";
+            string filter = $"$filter=name eq '{Name}' and ({String.Join(" or ", resourcetypefilter)})";
             ODataQuery<GenericResourceFilter> query = new ODataQuery<GenericResourceFilter>(filter);
 
+            IPage<GenericResource> resources;
             String[] types;
             try
             {
-                IPage<GenericResource> resources = ResourceManagementClient.Resources.ListByResourceGroupWithHttpMessagesAsync(ResourceGroupName, query).GetAwaiter().GetResult().Body;
+                resources = ResourceManagementClient.Resources.ListByResourceGroupWithHttpMessagesAsync(ResourceGroupName, query).GetAwaiter().GetResult().Body;
                 types = resources.Select(resource => resource.Type).ToArray();
+                Console.WriteLine(resources);
             }
             catch (CloudException exception)
             {
@@ -444,9 +447,9 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 if (!types.Contains(ResourceType, StringComparer.CurrentCultureIgnoreCase))
                 {
-                    throw new AzPSResourceNotFoundCloudException(String.Format(Resources.ResourceNotFoundTypeProvided,Name, ResourceType, ResourceGroupName));
+                    throw new AzPSResourceNotFoundCloudException(String.Format(Resources.ResourceNotFoundTypeProvided, Name, ResourceType, ResourceGroupName));
                 }
-                return;
+                return resources.First(resource => resource.Type.Equals(ResourceType, StringComparison.CurrentCultureIgnoreCase)); ;
             }
 
             if (types.Count() > 1)
@@ -458,14 +461,27 @@ namespace Microsoft.Azure.Commands.Ssh
                 throw new AzPSResourceNotFoundCloudException(String.Format(Resources.ResourceNotFoundNoTypeProvided, Name, ResourceGroupName));
             }
             ResourceType = types.ElementAt(0);
+
+            return resources.First();
+
         }
 
-        protected void CheckForBastionConnection()
-        {
+        protected void CheckForBastionConnection(GenericResource targetMachine)
+           
+        {  
+            // string location string vnet
+
+            foreach (PropertyInfo property in targetMachine.GetType().GetProperties())
+            {
+                string propertyName = property.Name;
+                object propertyValue = property.GetValue(targetMachine, null);
+                Console.WriteLine($"{propertyName}: {propertyValue}");
+            }
+
             if (Bastion.IsPresent)
             {
                 BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
-                bastionUtils.HandleBastionProperties(ResourceGroupName, Name, DefaultProfile.DefaultContext);
+                bastionUtils.HandleBastionProperties(ResourceGroupName, Name, DefaultProfile.DefaultContext,);
             }
         }
 
