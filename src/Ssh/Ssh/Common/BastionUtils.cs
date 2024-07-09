@@ -18,6 +18,7 @@ namespace Microsoft.Azure.Commands.Ssh
     using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
     using Microsoft.Azure.PowerShell.Ssh.Helpers.Network;
 
+
     using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
     using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
     using Microsoft.Azure.PowerShell.Ssh.Helpers.Compute;
@@ -32,6 +33,10 @@ namespace Microsoft.Azure.Commands.Ssh
     using System.Net;
     using Microsoft.Azure.Commands.ResourceManager.Common.Tags;
     using System.Collections.Generic;
+    using Microsoft.Azure.Commands.Common.Exceptions;
+    using System.Reflection;
+
+
 
     internal class BastionUtils
     {
@@ -66,30 +71,44 @@ namespace Microsoft.Azure.Commands.Ssh
                 return NetworkClient.NetworkManagementClient.BastionHosts;
             }
         }
-        
-        public void HandleBastionProperties(string resourceGroupName, string bastionName, IAzureContext context)
+
+        public void HandleBastionProperties( NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context)
         {
-            Console.WriteLine("Handling Bastion Properties");
+
             string vm = "north-europe-vm-vnet-bastion";
             string rsgroup = "Bastion-Dev-Testing-vm-vnet-bastion";
             BastionHost bastion = null;
 
+            string location = nic.Location;
+            CheckValidBastionDeveloperLocation(location);
+
+            string vNetId = null;
+            if (nic.IpConfigurations != null && nic.IpConfigurations.Any())
+            {
+                foreach (var ipConfig in nic.IpConfigurations)
+                {
+                    if (ipConfig.Subnet != null)
+                    {
+                        string subnetId = ipConfig.Subnet.Id;
+                        vNetId = GetVNetIdFromSubnetId(subnetId);
+                        break; 
+                    }
+                }
+            }
+
+
             try
             {
                 bastion = FetchDeveloperBastion(resourceGroupName, vm);
-                Console.WriteLine($"Bastion: {bastion}");
-                Console.WriteLine("Bastion found with VM name.");
+                
             }
             catch (Rest.Azure.CloudException exception)
             {
                 if (exception.Response.StatusCode == HttpStatusCode.NotFound)
                 {
-                    Console.WriteLine("Bastion not found with VM name, trying with resource group name.");
+                    throw new AzPSResourceNotFoundCloudException("Bastion not found with VM name, trying with resource group name.");
                 }
-                else
-                {
-                    throw; // Rethrow if it's an unexpected exception
-                }
+                
             }
 
             if (bastion == null)
@@ -97,7 +116,6 @@ namespace Microsoft.Azure.Commands.Ssh
                 try
                 {
                     bastion = FetchDeveloperBastion(resourceGroupName, rsgroup);
-                    Console.WriteLine("Bastion found with resource group name.");
                 }
                 catch (Rest.Azure.CloudException exception)
                 {
@@ -107,14 +125,15 @@ namespace Microsoft.Azure.Commands.Ssh
                     }
                     else
                     {
-                        throw; // Rethrow if it's an unexpected exception
+                        throw; 
                     }
                 }
             }
 
             if (bastion == null)
             {
-                CreateDeveloperBastion(resourceGroupName, rsgroup);
+                string bastionName = rsgroup;
+                CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetId);
                 Console.WriteLine("Bastion created.");
             }
 
@@ -122,7 +141,7 @@ namespace Microsoft.Azure.Commands.Ssh
             Console.WriteLine("JSON View: ");
             Console.WriteLine(json);
         }
-
+       
         public BastionHost FetchDeveloperBastion(string resourceGroupName, string name)
         {
             try
@@ -142,11 +161,11 @@ namespace Microsoft.Azure.Commands.Ssh
             }
         }
 
-        public BastionHost CreateDeveloperBastion(string resourceGroupName, string bastionName)
+        public BastionHost CreateDeveloperBastion(string resourceGroupName, string bastionName, string location, string vNetId)
         {
             var virtualNetwork = new SubResource
             {
-                Id = "/subscriptions/f02fce97-0b41-4430-9823-6c1545921419/resourceGroups/Bastion-Dev-Testing/providers/Microsoft.Network/virtualNetworks/north-europe-vm-vnet"
+                Id = vNetId
             };
 
             var sku = new Sku
@@ -156,7 +175,7 @@ namespace Microsoft.Azure.Commands.Ssh
 
             var bastion = new BastionHost
             {
-                Location = "northeurope",
+                Location = location,
                 IpConfigurations = new List<BastionHostIPConfiguration>(), 
                 VirtualNetwork = virtualNetwork,
                 ScaleUnits = 2,
@@ -171,7 +190,6 @@ namespace Microsoft.Azure.Commands.Ssh
                 Tags = new Dictionary<string, string>()
             };
 
-            // Execute the Create bastion call
             try
             {
                 this.BastionClient.CreateOrUpdate(resourceGroupName, bastionName, bastion);
@@ -182,8 +200,28 @@ namespace Microsoft.Azure.Commands.Ssh
                 Console.WriteLine($"Error creating bastion: {ex.Message}");
                 throw;
             }
-            // Return the created bastion
             return this.BastionClient.Get(resourceGroupName, bastionName);
+        }
+
+        protected void CheckValidBastionDeveloperLocation(string location)
+        {
+            string[] validLocations = { "centralus", "eastus2", "westus", "northeurope", "northcentralus", "westcentralus" };
+
+            if (!Array.Exists(validLocations, element => element.Equals(location, StringComparison.OrdinalIgnoreCase)))
+            {
+                string error = ($"The Bastion Developer Sku is not currently available in the specified region." +
+                    $"Learn more here: https://learn.microsoft.com/en-us/azure/bastion/configuration-settings");
+                throw new AzPSCloudException(error);
+
+            }
+        }
+        private string GetVNetIdFromSubnetId(string subnetId)
+        {
+            var parts = subnetId.Split('/');
+            int vNetIndex = Array.IndexOf(parts, "virtualNetworks") + 1;
+            string vNetName = parts[vNetIndex];
+            string vNetId = string.Join("/", parts.Take(vNetIndex + 1));
+            return vNetId;
         }
 
 

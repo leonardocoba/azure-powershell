@@ -66,7 +66,7 @@ namespace Microsoft.Azure.Commands.Ssh
             base.ExecuteCmdlet();
 
             ValidateParameters();
-            GenericResource targetResource = GetTargetResourceAndSetResourceType();
+            SetResourceType();
             record = new ProgressRecord(0, "Export Azure SSH Config", "Initialize Setup");
             UpdateProgressBar(record, "Preparing to create SSH Config", 0);
 

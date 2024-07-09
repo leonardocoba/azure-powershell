@@ -103,7 +103,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         /// <param name="usePrivateIp">Get a Private IP for the VM.</param>
         /// <param name="message">Hint message when public IP is not available</param>
         /// <returns>string containing the ip address</returns>
-        public string GetIpAddress(
+        public (string IpAddress, NetworkInterface Nic) GetIpAddress(
             string vmName, 
             string rgName,
             bool usePrivateIp,
@@ -112,6 +112,8 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             string _firstPrivateIp = null;
             string _firstPublicIp = null;
             message = "";
+            NetworkInterface foundNic = null;
+
 
             var result = this.VirtualMachineClient.GetWithHttpMessagesAsync(
                 rgName, vmName).GetAwaiter().GetResult();
@@ -134,18 +136,29 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                 }
 
                 if (_firstPrivateIp == null) { _firstPrivateIp = GetFirstPrivateIp(nic); }
-                if (usePrivateIp && _firstPrivateIp != null) { return _firstPrivateIp; }
-                if (!usePrivateIp && _firstPublicIp == null) { _firstPublicIp = GetFirstPublicIp(nic); }
-                if (!usePrivateIp && _firstPublicIp != null) { return _firstPublicIp; }
+                if (usePrivateIp && _firstPrivateIp != null)
+                {
+                    foundNic = nic;
+                    return (_firstPrivateIp, foundNic);
+                }
+                if (!usePrivateIp && _firstPublicIp == null)
+                {
+                    _firstPublicIp = GetFirstPublicIp(nic);
+                }
+                if (!usePrivateIp && _firstPublicIp != null)
+                {
+                    foundNic = nic;
+                    return (_firstPublicIp, foundNic);
+                }
             }
 
-            if (!usePrivateIp && _firstPrivateIp != null) 
+            if (!usePrivateIp && _firstPrivateIp != null)
             {
-                message = $"Unable to find public IP. Attempting to connect to private ip {_firstPrivateIp}";
-                return _firstPrivateIp;
+                message = $"Unable to find public IP. Attempting to connect to private IP {_firstPrivateIp}";
+                return (_firstPrivateIp, foundNic);
             }
 
-            return null;
+            return (null, foundNic);
         }
 
         #endregion

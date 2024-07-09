@@ -43,6 +43,7 @@ using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity;
 using System.Management.Automation.Runspaces;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute.Models;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
 using System.Reflection;
 
 
@@ -67,6 +68,8 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal string proxyPath;
         protected internal ProgressRecord record;
         protected internal bool createdServiceConfig;
+        internal NetworkInterface _networkInterface;
+
 
         protected internal readonly string[] supportedResourceTypes = {
             "Microsoft.HybridCompute/machines",
@@ -353,6 +356,7 @@ namespace Microsoft.Azure.Commands.Ssh
         [Parameter(Mandatory = false, HelpMessage = "When connecting to Arc resources, do not prompt for confirmation before updating the allowed port for SSH connection in the Connection Endpoint to match the target port or to install Az.Ssh.ArcProxy module from the PowerShell Gallery, if needed.")]
         public SwitchParameter Force { get; set; }
 
+       
         #endregion
 
         #region Protected Internal Methods
@@ -407,32 +411,30 @@ namespace Microsoft.Azure.Commands.Ssh
 
         }
 
-        protected internal GenericResource GetTargetResourceAndSetResourceType()
+        protected internal void SetResourceType()
         {
             if (ParameterSetName.Equals(IpAddressParameterSet))
             {
                 ResourceType = "Microsoft.Compute/virtualMachines";
-                return null;
+                return;
             }
             if (ParameterSetName.Equals(ResourceIdParameterSet))
             {
                 ResourceIdentifier idParser = new ResourceIdentifier(ResourceId);
-                ResourceGroupName = idParser.ResourceGroupName; 
+                ResourceGroupName = idParser.ResourceGroupName;
                 Name = idParser.ResourceName;
                 ResourceType = idParser.ResourceType;
             }
 
             var resourcetypefilter = supportedResourceTypes.Select(type => $"resourceType eq '{type}'").ToArray();
-            string filter = $"$filter=name eq '{Name}' and ({String.Join(" or ", resourcetypefilter)})";
+            String filter = $"$filter=name eq '{Name}' and ({String.Join(" or ", resourcetypefilter)})";
             ODataQuery<GenericResourceFilter> query = new ODataQuery<GenericResourceFilter>(filter);
 
-            IPage<GenericResource> resources;
             String[] types;
             try
             {
-                resources = ResourceManagementClient.Resources.ListByResourceGroupWithHttpMessagesAsync(ResourceGroupName, query).GetAwaiter().GetResult().Body;
+                IPage<GenericResource> resources = ResourceManagementClient.Resources.ListByResourceGroupWithHttpMessagesAsync(ResourceGroupName, query).GetAwaiter().GetResult().Body;
                 types = resources.Select(resource => resource.Type).ToArray();
-                Console.WriteLine(resources);
             }
             catch (CloudException exception)
             {
@@ -449,7 +451,7 @@ namespace Microsoft.Azure.Commands.Ssh
                 {
                     throw new AzPSResourceNotFoundCloudException(String.Format(Resources.ResourceNotFoundTypeProvided, Name, ResourceType, ResourceGroupName));
                 }
-                return resources.First(resource => resource.Type.Equals(ResourceType, StringComparison.CurrentCultureIgnoreCase)); ;
+                return;
             }
 
             if (types.Count() > 1)
@@ -461,30 +463,19 @@ namespace Microsoft.Azure.Commands.Ssh
                 throw new AzPSResourceNotFoundCloudException(String.Format(Resources.ResourceNotFoundNoTypeProvided, Name, ResourceGroupName));
             }
             ResourceType = types.ElementAt(0);
-
-            return resources.First();
-
         }
 
-        protected void CheckForBastionConnection(GenericResource targetMachine)
+        protected void CheckForBastionConnection()
            
-        {  
-            // string location string vnet
-
-            foreach (PropertyInfo property in targetMachine.GetType().GetProperties())
-            {
-                string propertyName = property.Name;
-                object propertyValue = property.GetValue(targetMachine, null);
-                Console.WriteLine($"{propertyName}: {propertyValue}");
-            }
-
+        {
             if (Bastion.IsPresent)
             {
                 BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
-                bastionUtils.HandleBastionProperties(ResourceGroupName, Name, DefaultProfile.DefaultContext,);
+
+                bastionUtils.HandleBastionProperties(_networkInterface, ResourceGroupName, Name, DefaultProfile.DefaultContext);
             }
         }
-
+        
         protected internal void UpdateProgressBar(
             ProgressRecord record,
             string statusMessage,
@@ -585,7 +576,12 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal void GetVmIpAddress()
         {
             string _message = "";
-            Ip = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp, out _message);
+
+            (string IpAdress, NetworkInterface networkInterface) = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp, out _message);
+
+            Ip = IpAdress;
+            _networkInterface = networkInterface;
+
 
             if (_message.StartsWith("Unable to find public IP.") && !UsePrivateIp)
             {

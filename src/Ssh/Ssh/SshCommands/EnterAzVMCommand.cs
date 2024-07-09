@@ -88,8 +88,8 @@ namespace Microsoft.Azure.Commands.Ssh
             base.ExecuteCmdlet();
 
             ValidateParameters();
-            GenericResource targetResource = GetTargetResourceAndSetResourceType();
-            CheckForBastionConnection(targetResource);
+            SetResourceType();
+            
  
             record = new ProgressRecord(0, "Preparing for SSH connection", "Initiating connection setup");
             UpdateProgressBar(record, "Setup SSH connection", 0);
@@ -114,6 +114,7 @@ namespace Microsoft.Azure.Commands.Ssh
                 }
                 UpdateProgressBar(record, $"Completed Relay information setup", 60);
             }
+            CheckForBastionConnection();
             try
             {
                 if (LocalUser == null)
