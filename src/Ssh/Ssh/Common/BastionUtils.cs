@@ -35,8 +35,7 @@ namespace Microsoft.Azure.Commands.Ssh
     using System.Collections.Generic;
     using Microsoft.Azure.Commands.Common.Exceptions;
     using System.Reflection;
-
-
+    using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
 
     internal class BastionUtils
     {
@@ -83,6 +82,7 @@ namespace Microsoft.Azure.Commands.Ssh
             CheckValidBastionDeveloperLocation(location);
 
             string vNetId = null;
+            string vNetName = null;
             if (nic.IpConfigurations != null && nic.IpConfigurations.Any())
             {
                 foreach (var ipConfig in nic.IpConfigurations)
@@ -90,12 +90,15 @@ namespace Microsoft.Azure.Commands.Ssh
                     if (ipConfig.Subnet != null)
                     {
                         string subnetId = ipConfig.Subnet.Id;
-                        vNetId = GetVNetIdFromSubnetId(subnetId);
-                        break; 
+                        
+                        (vNetId, vNetName) = GetVNetDetailsFromSubnetId(subnetId);
+                        break;
                     }
                 }
             }
 
+            // string bastionInVnet = ResourceGraphUtils.QueryResourceGraph(vNetId);
+            // 
 
             try
             {
@@ -130,16 +133,14 @@ namespace Microsoft.Azure.Commands.Ssh
                 }
             }
 
+            // if (bastionInVnet.count == 0)
             if (bastion == null)
             {
                 string bastionName = rsgroup;
-                CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetId);
+                CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetName);
                 Console.WriteLine("Bastion created.");
             }
 
-            string json = JsonConvert.SerializeObject(bastion, Formatting.Indented);
-            Console.WriteLine("JSON View: ");
-            Console.WriteLine(json);
         }
        
         public BastionHost FetchDeveloperBastion(string resourceGroupName, string name)
@@ -215,13 +216,17 @@ namespace Microsoft.Azure.Commands.Ssh
 
             }
         }
-        private string GetVNetIdFromSubnetId(string subnetId)
+        private (string vNetId, string vNetName) GetVNetDetailsFromSubnetId(string subnetId)
         {
             var parts = subnetId.Split('/');
-            int vNetIndex = Array.IndexOf(parts, "virtualNetworks") + 1;
-            string vNetName = parts[vNetIndex];
-            string vNetId = string.Join("/", parts.Take(vNetIndex + 1));
-            return vNetId;
+            int vNetIndex = Array.IndexOf(parts, "virtualNetworks");
+            if (vNetIndex == -1 || vNetIndex >= parts.Length - 1)
+            {
+                throw new ArgumentException("Invalid subnet ID", nameof(subnetId));
+            }
+            string vNetName = parts[vNetIndex + 1];
+            string vNetId = string.Join("/", parts.Take(vNetIndex + 2));
+            return (vNetId, vNetName);
         }
 
 
