@@ -36,6 +36,10 @@ namespace Microsoft.Azure.Commands.Ssh
     using Microsoft.Azure.Commands.Common.Exceptions;
     using System.Reflection;
     using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
+    using Microsoft.Azure.Management.WebSites.Version2016_09_01.Models;
+    using System.Net.Http;
+    using System.Text;
+    using System.Threading.Tasks;
 
     internal class BastionUtils
     {
@@ -74,12 +78,14 @@ namespace Microsoft.Azure.Commands.Ssh
         public void HandleBastionProperties( NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context)
         {
 
-            string vm = "north-europe-vm-vnet-bastion";
             string rsgroup = "Bastion-Dev-Testing-vm-vnet-bastion";
             BastionHost bastion = null;
 
             string location = nic.Location;
             CheckValidBastionDeveloperLocation(location);
+
+            string vmSubscriptionID = nic.VirtualMachine.Id;
+
 
             string vNetId = null;
             string vNetName = null;
@@ -100,19 +106,6 @@ namespace Microsoft.Azure.Commands.Ssh
             // string bastionInVnet = ResourceGraphUtils.QueryResourceGraph(vNetId);
             // 
 
-            try
-            {
-                bastion = FetchDeveloperBastion(resourceGroupName, vm);
-                
-            }
-            catch (Rest.Azure.CloudException exception)
-            {
-                if (exception.Response.StatusCode == HttpStatusCode.NotFound)
-                {
-                    throw new AzPSResourceNotFoundCloudException("Bastion not found with VM name, trying with resource group name.");
-                }
-                
-            }
 
             if (bastion == null)
             {
@@ -137,12 +130,17 @@ namespace Microsoft.Azure.Commands.Ssh
             if (bastion == null)
             {
                 string bastionName = rsgroup;
-                CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetName);
-                Console.WriteLine("Bastion created.");
+
+
+                bastion  = CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetName);
+                
             }
 
+            
+            Console.WriteLine("Done");
+
         }
-       
+
         public BastionHost FetchDeveloperBastion(string resourceGroupName, string name)
         {
             try
@@ -229,7 +227,40 @@ namespace Microsoft.Azure.Commands.Ssh
             return (vNetId, vNetName);
         }
 
+        private async Task<string> GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
+        {
+            // Assuming Token Acquisition has been setup correctly
+            var authToken = await GetAuthToken(context); // You need to implement this method
 
+            var content = new
+            {
+                resourceId = virtualMachineId,
+                bastionResourceId = bastion.Id,
+                vmPort = resourcePort,
+                azToken = authToken,
+                connectionType = "nativeclient"
+            };
+
+            var jsonContent = JsonConvert.SerializeObject(content);
+            var stringContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+            var webAddress = $"https://{bastion.DnsName}/api/connection"; 
+
+            using (var client = new HttpClient())
+            {
+                
+                client.DefaultRequestHeaders.Add("Connection", "close");
+                client.DefaultRequestHeaders.Add("User-Agent", "PowerShell");
+                ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+                
+
+                HttpResponseMessage response = await client.PostAsync(webAddress, stringContent);
+                response.EnsureSuccessStatusCode();
+
+                string responseBody = await response.Content.ReadAsStringAsync();
+                return responseBody;
+            }
+        }
     }
 }
 #endregion
