@@ -13,28 +13,20 @@
 // ----------------------------------------------------------------------------------
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Management.Automation;
-using System.Net;
+
 using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
-using Microsoft.Azure.Commands.Common.Exceptions;
-using Microsoft.Azure.Commands.ResourceManager.Common.Tags;
-using Microsoft.Azure.Management.Internal.Network.Common;
-using Microsoft.Azure.Management.Internal.Resources.Utilities.Models;
-using Microsoft.Azure.Management.WebSites.Version2016_09_01.Models;
-using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.Compute;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.Network;
+using Microsoft.Azure.Commands.Common.Authentication;
+
+using Microsoft.Azure.PowerShell.Ssh.Helpers.ResourceGraph;
+
 using Microsoft.Azure.PowerShell.Ssh.Helpers.ResourceGraph.Models;
-using Microsoft.Rest.Azure;
 using Newtonsoft.Json;
 
 namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 {
     internal class ResourceGraphUtils
     {
-        private IResourceGraphClient _resourceGraphClient;
+        private IAzureResourceGraphClient _resourceGraphClient;
         private IAzureContext _context;
 
         public ResourceGraphUtils(IAzureContext context)
@@ -42,20 +34,18 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             _context = context;
         }
 
-        private IResourceGraphClient ResourceGraphClient
+        public IAzureResourceGraphClient AzureResourceGraphClient
         {
             get
             {
-                if (_resourceGraphClient == null)
+                if (this._resourceGraphClient == null)
                 {
-                    _resourceGraphClient = new ResourceGraphClient(_context);
-                    // Ensure that ResourceGraphClient is correctly instantiated, 'new IResourceGraphClient' is invalid
+                    this._resourceGraphClient =
+                        AzureSession.Instance.ClientFactory.CreateArmClient<AzureResourceGraphClient>(
+                            this._context, AzureEnvironment.Endpoint.ResourceManager);
                 }
-                return _resourceGraphClient;
-            }
-            set
-            {
-                _resourceGraphClient = value;
+
+                return this._resourceGraphClient;
             }
         }
 
@@ -76,7 +66,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                 {
                     Query = query
                 };
-                response = ResourceGraphClient.ResourcesWithHttpMessagesAsync(request).Result.Body;
+                response = AzureResourceGraphClient.ResourcesWithHttpMessagesAsync(request).Result.Body;
             }
             catch (Exception ex)
             {
@@ -88,7 +78,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             {
                 Console.WriteLine("Warning: Result is truncated.");
             }
-
+            Console.WriteLine(JsonConvert.SerializeObject(response));
             return JsonConvert.SerializeObject(response);
         }
     }

@@ -40,6 +40,8 @@ namespace Microsoft.Azure.Commands.Ssh
     using System.Net.Http;
     using System.Text;
     using System.Threading.Tasks;
+    using Newtonsoft.Json.Linq;
+    using System.Management.Automation.Language;
 
     internal class BastionUtils
     {
@@ -78,9 +80,6 @@ namespace Microsoft.Azure.Commands.Ssh
         public void HandleBastionProperties( NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context)
         {
 
-            string rsgroup = "Bastion-Dev-Testing-vm-vnet-bastion";
-            BastionHost bastion = null;
-
             string location = nic.Location;
             CheckValidBastionDeveloperLocation(location);
 
@@ -102,42 +101,27 @@ namespace Microsoft.Azure.Commands.Ssh
                     }
                 }
             }
+            ResourceGraphUtils resourceGraphUtils = new ResourceGraphUtils(context);
+            string bastionsFoundInVNet = resourceGraphUtils.QueryResourceGraph(vNetId);
+            string bastionNameInVNet = ParseAvailableBastions(bastionsFoundInVNet);
 
-            // string bastionInVnet = ResourceGraphUtils.QueryResourceGraph(vNetId);
-            // 
+            BastionHost bastion;
 
 
-            if (bastion == null)
+            if (bastionNameInVNet == null)
             {
-                try
-                {
-                    bastion = FetchDeveloperBastion(resourceGroupName, rsgroup);
-                }
-                catch (Rest.Azure.CloudException exception)
-                {
-                    if (exception.Response.StatusCode == HttpStatusCode.NotFound)
-                    {
-                        Console.WriteLine("Bastion not found with resource group name, creating new bastion.");
-                    }
-                    else
-                    {
-                        throw; 
-                    }
-                }
-            }
+                string bastionName = resourceGroupName + "-vnet-bastion";
 
-            // if (bastionInVnet.count == 0)
-            if (bastion == null)
-            {
-                string bastionName = rsgroup;
-
-
-                bastion  = CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetName);
+                bastion  = CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetId);
                 
             }
+            else
+            {
+                bastion = FetchDeveloperBastion(resourceGroupName, bastionNameInVNet);
 
-            
-            Console.WriteLine("Done");
+            }
+
+
 
         }
 
@@ -227,20 +211,47 @@ namespace Microsoft.Azure.Commands.Ssh
             return (vNetId, vNetName);
         }
 
-        private async Task<string> GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
+        public static string ParseAvailableBastions(string bastionsFoundInVnet)
         {
-            // Assuming Token Acquisition has been setup correctly
-            var authToken = await GetAuthToken(context); // You need to implement this method
+            var jsonObject = JObject.Parse(bastionsFoundInVnet);
+
+            int count = (int)jsonObject["count"];
+
+            if (count == 0)
+            {
+                return null;
+            }
+
+            if (count >= 1)
+            {
+                var bastionsArray = jsonObject["data"];
+                if (bastionsArray != null && bastionsArray.HasValues)
+                {
+                    var firstBastion = bastionsArray.First;
+                    if (firstBastion != null && firstBastion["name"] != null)
+                    {
+                        return firstBastion["name"].ToString();
+                    }
+                }
+            }
+
+            return null;
+        }
+    
+
+    private async Task<string> GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
+        {
+            //var authToken = await GetAuthToken(context); 
 
             var content = new
             {
                 resourceId = virtualMachineId,
                 bastionResourceId = bastion.Id,
                 vmPort = resourcePort,
-                azToken = authToken,
+               // azToken = authToken,
                 connectionType = "nativeclient"
             };
-
+            
             var jsonContent = JsonConvert.SerializeObject(content);
             var stringContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
