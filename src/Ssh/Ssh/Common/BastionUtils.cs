@@ -130,7 +130,6 @@ namespace Microsoft.Azure.Commands.Ssh
 
 
                 var bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
-                Console.WriteLine("hey: ", bastionEndPoint);
                 TunnelServer tunnel = new TunnelServer(context, port, bastion, bastionEndPoint, vmSubscriptionID, 0);
 
             }
