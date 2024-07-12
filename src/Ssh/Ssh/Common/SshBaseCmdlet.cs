@@ -472,7 +472,7 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
 
-                bastionUtils.HandleBastionProperties(_networkInterface, ResourceGroupName, Name, DefaultProfile.DefaultContext);
+                bastionUtils.HandleBastionProperties(_networkInterface, ResourceGroupName, Name, DefaultProfile.DefaultContext, Port);
             }
         }
         

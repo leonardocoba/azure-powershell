@@ -77,9 +77,13 @@ namespace Microsoft.Azure.Commands.Ssh
             }
         }
 
-        public void HandleBastionProperties( NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context)
+        public void HandleBastionProperties(NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context, string vmPort)
         {
-
+            // if (vmPort != "22" || vmPort != null)
+            // {
+            //throw new InvalidOperationException("SSH to Bastion host is only support for Developer Bastion Skus");
+            // }
+            int port = 22;
             string location = nic.Location;
             CheckValidBastionDeveloperLocation(location);
 
@@ -95,7 +99,7 @@ namespace Microsoft.Azure.Commands.Ssh
                     if (ipConfig.Subnet != null)
                     {
                         string subnetId = ipConfig.Subnet.Id;
-                        
+
                         (vNetId, vNetName) = GetVNetDetailsFromSubnetId(subnetId);
                         break;
                     }
@@ -112,8 +116,8 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 string bastionName = resourceGroupName + "-vnet-bastion";
 
-                bastion  = CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetId);
-                
+                bastion = CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetId);
+
             }
             else
             {
@@ -121,7 +125,19 @@ namespace Microsoft.Azure.Commands.Ssh
 
             }
 
+            try
+            {
 
+
+                var bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
+                Console.WriteLine("hey: ", bastionEndPoint);
+                TunnelServer tunnel = new TunnelServer(context, port, bastion, bastionEndPoint, vmSubscriptionID, 0);
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("hey ", ex);
+            }
 
         }
 
@@ -132,7 +148,7 @@ namespace Microsoft.Azure.Commands.Ssh
                 var bastion = this.BastionClient.Get(resourceGroupName, name);
                 if (bastion.Sku.Name != "Developer")
                 {
-                    throw new InvalidOperationException("Only the Bastion Developer SKU is available");
+                    throw new InvalidOperationException("SSH to Bastion host is only support for Developer Bastion Skus");
                 }
 
                 return bastion;
@@ -159,7 +175,7 @@ namespace Microsoft.Azure.Commands.Ssh
             var bastion = new BastionHost
             {
                 Location = location,
-                IpConfigurations = new List<BastionHostIPConfiguration>(), 
+                IpConfigurations = new List<BastionHostIPConfiguration>(),
                 VirtualNetwork = virtualNetwork,
                 ScaleUnits = 2,
                 DisableCopyPaste = null,
@@ -168,7 +184,7 @@ namespace Microsoft.Azure.Commands.Ssh
                 EnableShareableLink = null,
                 EnableTunneling = null,
                 EnableKerberos = null,
-                EnableSessionRecording = null,                
+                EnableSessionRecording = null,
                 Sku = sku,
                 Tags = new Dictionary<string, string>()
             };
@@ -222,56 +238,58 @@ namespace Microsoft.Azure.Commands.Ssh
                 return null;
             }
 
-            if (count >= 1)
+            var bastion = jsonObject["data"].First;
+            if (bastion != null && bastion["sku"] != null && bastion["sku"]["name"] != null)
             {
-                var bastionsArray = jsonObject["data"];
-                if (bastionsArray != null && bastionsArray.HasValues)
+                string skuName = bastion["sku"]["name"].ToString();
+                if (skuName != "Developer")
                 {
-                    var firstBastion = bastionsArray.First;
-                    if (firstBastion != null && firstBastion["name"] != null)
-                    {
-                        return firstBastion["name"].ToString();
-                    }
+                    throw new InvalidOperationException("SSH to Bastion host is only support for Developer Bastion Skus");
+
+                }
+                if (bastion["name"] != null)
+                {
+                    return bastion["name"].ToString();
                 }
             }
 
             return null;
         }
-    
 
-    private async Task<string> GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
+
+
+        public string GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
         {
-            //var authToken = await GetAuthToken(context); 
-
+            //string accessToken= context.Account.GetProperty("AccessToken");
             var content = new
             {
                 resourceId = virtualMachineId,
                 bastionResourceId = bastion.Id,
                 vmPort = resourcePort,
-               // azToken = authToken,
+                azToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Ik1HTHFqOThWTkxvWGFGZnBKQ0JwZ0I0SmFLcyIsImtpZCI6Ik1HTHFqOThWTkxvWGFGZnBKQ0JwZ0I0SmFLcyJ9.eyJhdWQiOiJodHRwczovL21hbmFnZW1lbnQuY29yZS53aW5kb3dzLm5ldC8iLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC83MmY5ODhiZi04NmYxLTQxYWYtOTFhYi0yZDdjZDAxMWRiNDcvIiwiaWF0IjoxNzIwNzM4ODAxLCJuYmYiOjE3MjA3Mzg4MDEsImV4cCI6MTcyMDc0Mzk3MywiX2NsYWltX25hbWVzIjp7Imdyb3VwcyI6InNyYzEifSwiX2NsYWltX3NvdXJjZXMiOnsic3JjMSI6eyJlbmRwb2ludCI6Imh0dHBzOi8vZ3JhcGgud2luZG93cy5uZXQvNzJmOTg4YmYtODZmMS00MWFmLTkxYWItMmQ3Y2QwMTFkYjQ3L3VzZXJzLzRmNGM0MDhkLTVjOGQtNGJhYS05MmExLTlhZDIyZTZkMTZkYy9nZXRNZW1iZXJPYmplY3RzIn19LCJhY3IiOiIxIiwiYWlvIjoiQVpRQWEvOFhBQUFBWUNjVnVNZThKaUFlZmpMYWZpZGZIbjJqeWhxNTZBQnBFQi9iOC9ic3E4d3JRNXkxSkZGZVFTdGtTTXhvb2FpVStMTVJSM0hYVXNvbEdwL3NuLytpRC9XcHNtL05aSkI1eDJ5UGpCblkvdFovNkQwM0FkQlNncnQzTWw0cUI0WXBjN0pZWXpvemxtZm4zdUgxeUFKT0ZoaFdweGdzMjJ1YjMyano5cGp4TFZvd2oxMDM5Znpxc05FUG1LTDJLcmt2IiwiYW1yIjpbInJzYSIsIm1mYSJdLCJhcHBpZCI6IjA0YjA3Nzk1LThkZGItNDYxYS1iYmVlLTAyZjllMWJmN2I0NiIsImFwcGlkYWNyIjoiMCIsImNhcG9saWRzX2xhdGViaW5kIjpbIjI5Mzk5Y2Y5LTliNmItNDIwNS1iNWIzLTEzYTEzNGU5YjIzMyJdLCJkZXZpY2VpZCI6IjljNTU3Mjc3LTcwODYtNDg1My04NjI5LTg1NTVkMjY2NTg3MyIsImZhbWlseV9uYW1lIjoiQ29iYWxlZGEiLCJnaXZlbl9uYW1lIjoiTGVvbmFyZG8iLCJpZHR5cCI6InVzZXIiLCJpcGFkZHIiOiIyMDAxOjQ4OTg6YTgwMDoxMDEwOjhjM2Q6N2YyZTozNTM5OmVhMmYiLCJuYW1lIjoiTGVvbmFyZG8gQ29iYWxlZGEiLCJvaWQiOiI0ZjRjNDA4ZC01YzhkLTRiYWEtOTJhMS05YWQyMmU2ZDE2ZGMiLCJvbnByZW1fc2lkIjoiUy0xLTUtMjEtMjEyNzUyMTE4NC0xNjA0MDEyOTIwLTE4ODc5Mjc1MjctNzY2NTE3NTAiLCJwdWlkIjoiMTAwMzIwMDM3QTBGQTlBOCIsInJoIjoiMC5BUm9BdjRqNWN2R0dyMEdScXkxODBCSGJSMFpJZjNrQXV0ZFB1a1Bhd2ZqMk1CTWFBSlkuIiwic2NwIjoidXNlcl9pbXBlcnNvbmF0aW9uIiwic3ViIjoiWXBJeVNtZC13b0JCSzQyVVd0M3ZXajduSFNMdlhvdlBzZU52b0Ezck9mMCIsInRpZCI6IjcyZjk4OGJmLTg2ZjEtNDFhZi05MWFiLTJkN2NkMDExZGI0NyIsInVuaXF1ZV9uYW1lIjoidC1sY29iYWxlZGFAbWljcm9zb2Z0LmNvbSIsInVwbiI6InQtbGNvYmFsZWRhQG1pY3Jvc29mdC5jb20iLCJ1dGkiOiJUejlHQ2l0NU4wVzd1Z1lub0hITkFBIiwidmVyIjoiMS4wIiwid2lkcyI6WyJiNzlmYmY0ZC0zZWY5LTQ2ODktODE0My03NmIxOTRlODU1MDkiXSwieG1zX2NhZSI6IjEiLCJ4bXNfY2MiOlsiQ1AxIl0sInhtc19maWx0ZXJfaW5kZXgiOlsiMjYiXSwieG1zX2lkcmVsIjoiMSAyOCIsInhtc19yZCI6IjAuNDJMbFlCUmlsQUlBIiwieG1zX3NzbSI6IjEiLCJ4bXNfdGNkdCI6MTI4OTI0MTU0N30.qJaPF6NuMMwgirY_ZW42dnZblvG1Ym7m--cjq6Oq38IHAcIUQ1JHRMbMk63hkjJWOjCdVUwrXiia6Yc3pVR1Ssf2hcdU36IBLyNVSg7RUtqw5PsXRwDdtzyUZambed6OBbuTFJBtOjEcqnpOJCoj4c7BUZX9VCe5uzT1kBBP_ArSb_O2UK9T27TkHIqwNexX5Wh88snkpjGpQGqR3bz7N4FGx9M4sRJT7j66IFw3T96xkdQQQn--u3UOCDOH47j1wXgBoNIuLBtYc3lYKayJDIEF8xJsphctNpvD6z3i3IMBuTVikPwbIXF8ZWMxZTmyUJTgMJkSuv5yBc77Zt5C3w",
+                //azToken = accessToken,
                 connectionType = "nativeclient"
             };
-            
+
             var jsonContent = JsonConvert.SerializeObject(content);
             var stringContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-            var webAddress = $"https://{bastion.DnsName}/api/connection"; 
+            var webAddress = $"https://{bastion.DnsName}/api/connection";
 
             using (var client = new HttpClient())
             {
-                
                 client.DefaultRequestHeaders.Add("Connection", "close");
                 client.DefaultRequestHeaders.Add("User-Agent", "PowerShell");
-                ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
-                
 
-                HttpResponseMessage response = await client.PostAsync(webAddress, stringContent);
+                HttpResponseMessage response = client.PostAsync(webAddress, stringContent).GetAwaiter().GetResult();
                 response.EnsureSuccessStatusCode();
 
-                string responseBody = await response.Content.ReadAsStringAsync();
+                string responseBody = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
                 return responseBody;
             }
         }
     }
-}
+
+    }
 #endregion
