@@ -39,7 +39,7 @@ namespace Microsoft.Azure.Commands.Ssh
     using Microsoft.Azure.Management.WebSites.Version2016_09_01.Models;
     using System.Net.Http;
     using System.Text;
-    using System.Threading.Tasks;
+    using System.Threading;
     using Newtonsoft.Json.Linq;
     using System.Management.Automation.Language;
 
@@ -130,12 +130,16 @@ namespace Microsoft.Azure.Commands.Ssh
 
 
                 var bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
-                TunnelServer tunnel = new TunnelServer(context, port, bastion, bastionEndPoint, vmSubscriptionID, 0);
+                int bastionPort = 0;  // no custom ports for the bastion developer
 
+                TunnelServer tunnel = new TunnelServer(context, port, bastion, bastionEndPoint, vmSubscriptionID, bastionPort);
+
+                Thread tunnelThread = new Thread(() => tunnel.StartServer());
+                tunnelThread.Start();
             }
             catch (Exception ex)
             {
-                Console.WriteLine("hey ", ex);
+                Console.WriteLine(ex);
             }
 
         }
