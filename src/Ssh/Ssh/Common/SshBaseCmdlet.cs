@@ -47,6 +47,7 @@ using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
 using System.Reflection;
 
 
+
 namespace Microsoft.Azure.Commands.Ssh
 
 {
@@ -465,14 +466,14 @@ namespace Microsoft.Azure.Commands.Ssh
             ResourceType = types.ElementAt(0);
         }
 
-        protected void CheckForBastionConnection()
+        protected void StartBastionConnection(Process sshProcess)
            
         {
             if (Bastion.IsPresent)
             {
                 BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
 
-                bastionUtils.HandleBastionProperties(_networkInterface, ResourceGroupName, Name, DefaultProfile.DefaultContext, Port);
+                bastionUtils.HandleBastionProperties(_networkInterface, ResourceGroupName, Name, DefaultProfile.DefaultContext, Port, sshProcess);
             }
         }
         

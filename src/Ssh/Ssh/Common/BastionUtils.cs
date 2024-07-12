@@ -42,6 +42,7 @@ namespace Microsoft.Azure.Commands.Ssh
     using System.Threading;
     using Newtonsoft.Json.Linq;
     using System.Management.Automation.Language;
+    using System.Diagnostics;
 
     internal class BastionUtils
     {
@@ -76,8 +77,8 @@ namespace Microsoft.Azure.Commands.Ssh
                 return NetworkClient.NetworkManagementClient.BastionHosts;
             }
         }
-
-        public void HandleBastionProperties(NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context, string vmPort)
+        #endregion
+        public void HandleBastionProperties(NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context, string vmPort, Process sshProcess)
         {
             // if (vmPort != "22" || vmPort != null)
             // {
@@ -124,14 +125,24 @@ namespace Microsoft.Azure.Commands.Ssh
                 bastion = FetchDeveloperBastion(resourceGroupName, bastionNameInVNet);
 
             }
-
+            int bastionPort = 0;  // no custom ports for the bastion developer
+            string bastionEndPoint = null;
             try
             {
 
 
-                var bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
-                int bastionPort = 0;  // no custom ports for the bastion developer
+                bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
+                Console.WriteLine(bastionEndPoint);
 
+                
+            }
+            catch (Exception ex)
+            {
+                string error = "Error fetching end point: " + ex.Message;
+                throw new AzPSCloudException(error);
+            }
+
+            try {
                 TunnelServer tunnel = new TunnelServer(context, port, bastion, bastionEndPoint, vmSubscriptionID, bastionPort);
 
                 Thread tunnelThread = new Thread(() => tunnel.StartServer());
@@ -139,9 +150,10 @@ namespace Microsoft.Azure.Commands.Ssh
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex);
+                string error = "Error connecting to Bastion Host: " + ex.Message;
+                throw new AzPSCloudException(error);
             }
-
+            
         }
 
         public BastionHost FetchDeveloperBastion(string resourceGroupName, string name)
@@ -263,13 +275,13 @@ namespace Microsoft.Azure.Commands.Ssh
 
         public string GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
         {
-            //string accessToken= context.Account.GetProperty("AccessToken");
+            //string accessToken= context.Account.GetAccessToken();
             var content = new
             {
                 resourceId = virtualMachineId,
                 bastionResourceId = bastion.Id,
                 vmPort = resourcePort,
-                azToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Ik1HTHFqOThWTkxvWGFGZnBKQ0JwZ0I0SmFLcyIsImtpZCI6Ik1HTHFqOThWTkxvWGFGZnBKQ0JwZ0I0SmFLcyJ9.eyJhdWQiOiJodHRwczovL21hbmFnZW1lbnQuY29yZS53aW5kb3dzLm5ldC8iLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC83MmY5ODhiZi04NmYxLTQxYWYtOTFhYi0yZDdjZDAxMWRiNDcvIiwiaWF0IjoxNzIwNzM4ODAxLCJuYmYiOjE3MjA3Mzg4MDEsImV4cCI6MTcyMDc0Mzk3MywiX2NsYWltX25hbWVzIjp7Imdyb3VwcyI6InNyYzEifSwiX2NsYWltX3NvdXJjZXMiOnsic3JjMSI6eyJlbmRwb2ludCI6Imh0dHBzOi8vZ3JhcGgud2luZG93cy5uZXQvNzJmOTg4YmYtODZmMS00MWFmLTkxYWItMmQ3Y2QwMTFkYjQ3L3VzZXJzLzRmNGM0MDhkLTVjOGQtNGJhYS05MmExLTlhZDIyZTZkMTZkYy9nZXRNZW1iZXJPYmplY3RzIn19LCJhY3IiOiIxIiwiYWlvIjoiQVpRQWEvOFhBQUFBWUNjVnVNZThKaUFlZmpMYWZpZGZIbjJqeWhxNTZBQnBFQi9iOC9ic3E4d3JRNXkxSkZGZVFTdGtTTXhvb2FpVStMTVJSM0hYVXNvbEdwL3NuLytpRC9XcHNtL05aSkI1eDJ5UGpCblkvdFovNkQwM0FkQlNncnQzTWw0cUI0WXBjN0pZWXpvemxtZm4zdUgxeUFKT0ZoaFdweGdzMjJ1YjMyano5cGp4TFZvd2oxMDM5Znpxc05FUG1LTDJLcmt2IiwiYW1yIjpbInJzYSIsIm1mYSJdLCJhcHBpZCI6IjA0YjA3Nzk1LThkZGItNDYxYS1iYmVlLTAyZjllMWJmN2I0NiIsImFwcGlkYWNyIjoiMCIsImNhcG9saWRzX2xhdGViaW5kIjpbIjI5Mzk5Y2Y5LTliNmItNDIwNS1iNWIzLTEzYTEzNGU5YjIzMyJdLCJkZXZpY2VpZCI6IjljNTU3Mjc3LTcwODYtNDg1My04NjI5LTg1NTVkMjY2NTg3MyIsImZhbWlseV9uYW1lIjoiQ29iYWxlZGEiLCJnaXZlbl9uYW1lIjoiTGVvbmFyZG8iLCJpZHR5cCI6InVzZXIiLCJpcGFkZHIiOiIyMDAxOjQ4OTg6YTgwMDoxMDEwOjhjM2Q6N2YyZTozNTM5OmVhMmYiLCJuYW1lIjoiTGVvbmFyZG8gQ29iYWxlZGEiLCJvaWQiOiI0ZjRjNDA4ZC01YzhkLTRiYWEtOTJhMS05YWQyMmU2ZDE2ZGMiLCJvbnByZW1fc2lkIjoiUy0xLTUtMjEtMjEyNzUyMTE4NC0xNjA0MDEyOTIwLTE4ODc5Mjc1MjctNzY2NTE3NTAiLCJwdWlkIjoiMTAwMzIwMDM3QTBGQTlBOCIsInJoIjoiMC5BUm9BdjRqNWN2R0dyMEdScXkxODBCSGJSMFpJZjNrQXV0ZFB1a1Bhd2ZqMk1CTWFBSlkuIiwic2NwIjoidXNlcl9pbXBlcnNvbmF0aW9uIiwic3ViIjoiWXBJeVNtZC13b0JCSzQyVVd0M3ZXajduSFNMdlhvdlBzZU52b0Ezck9mMCIsInRpZCI6IjcyZjk4OGJmLTg2ZjEtNDFhZi05MWFiLTJkN2NkMDExZGI0NyIsInVuaXF1ZV9uYW1lIjoidC1sY29iYWxlZGFAbWljcm9zb2Z0LmNvbSIsInVwbiI6InQtbGNvYmFsZWRhQG1pY3Jvc29mdC5jb20iLCJ1dGkiOiJUejlHQ2l0NU4wVzd1Z1lub0hITkFBIiwidmVyIjoiMS4wIiwid2lkcyI6WyJiNzlmYmY0ZC0zZWY5LTQ2ODktODE0My03NmIxOTRlODU1MDkiXSwieG1zX2NhZSI6IjEiLCJ4bXNfY2MiOlsiQ1AxIl0sInhtc19maWx0ZXJfaW5kZXgiOlsiMjYiXSwieG1zX2lkcmVsIjoiMSAyOCIsInhtc19yZCI6IjAuNDJMbFlCUmlsQUlBIiwieG1zX3NzbSI6IjEiLCJ4bXNfdGNkdCI6MTI4OTI0MTU0N30.qJaPF6NuMMwgirY_ZW42dnZblvG1Ym7m--cjq6Oq38IHAcIUQ1JHRMbMk63hkjJWOjCdVUwrXiia6Yc3pVR1Ssf2hcdU36IBLyNVSg7RUtqw5PsXRwDdtzyUZambed6OBbuTFJBtOjEcqnpOJCoj4c7BUZX9VCe5uzT1kBBP_ArSb_O2UK9T27TkHIqwNexX5Wh88snkpjGpQGqR3bz7N4FGx9M4sRJT7j66IFw3T96xkdQQQn--u3UOCDOH47j1wXgBoNIuLBtYc3lYKayJDIEF8xJsphctNpvD6z3i3IMBuTVikPwbIXF8ZWMxZTmyUJTgMJkSuv5yBc77Zt5C3w",
+                azToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Ik1HTHFqOThWTkxvWGFGZnBKQ0JwZ0I0SmFLcyIsImtpZCI6Ik1HTHFqOThWTkxvWGFGZnBKQ0JwZ0I0SmFLcyJ9.eyJhdWQiOiJodHRwczovL21hbmFnZW1lbnQuY29yZS53aW5kb3dzLm5ldC8iLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC83MmY5ODhiZi04NmYxLTQxYWYtOTFhYi0yZDdjZDAxMWRiNDcvIiwiaWF0IjoxNzIwODA1OTQ4LCJuYmYiOjE3MjA4MDU5NDgsImV4cCI6MTcyMDgxMDA4MiwiX2NsYWltX25hbWVzIjp7Imdyb3VwcyI6InNyYzEifSwiX2NsYWltX3NvdXJjZXMiOnsic3JjMSI6eyJlbmRwb2ludCI6Imh0dHBzOi8vZ3JhcGgud2luZG93cy5uZXQvNzJmOTg4YmYtODZmMS00MWFmLTkxYWItMmQ3Y2QwMTFkYjQ3L3VzZXJzLzRmNGM0MDhkLTVjOGQtNGJhYS05MmExLTlhZDIyZTZkMTZkYy9nZXRNZW1iZXJPYmplY3RzIn19LCJhY3IiOiIxIiwiYWlvIjoiQVpRQWEvOFhBQUFBaXJSZHJNQWIxT0FZcEwxN2c3c1gvR21GcTFackRJUXJLaUdvUW8zZ3hSSmoxYjU2M2lraE0yb2VEcjg3S3d1b2had0J0RFZxUmJUSW1hSFJDZ1BqMFVoOFJFMXRMQnNxM3h5YjY5eHNZNUxqZ1VUVVFWeWhhQm50by8xYWY4QStUWFFFdXkwMEZBdXpHUHRsbEdLdjFTREM2SXdsemZ2NU5wcUJmQjhUZ1U4bzNLU3FOSjlwZ3Fkczh2RFFML0lEIiwiYW1yIjpbInJzYSIsIm1mYSJdLCJhcHBpZCI6IjA0YjA3Nzk1LThkZGItNDYxYS1iYmVlLTAyZjllMWJmN2I0NiIsImFwcGlkYWNyIjoiMCIsImNhcG9saWRzX2xhdGViaW5kIjpbIjI5Mzk5Y2Y5LTliNmItNDIwNS1iNWIzLTEzYTEzNGU5YjIzMyJdLCJkZXZpY2VpZCI6IjljNTU3Mjc3LTcwODYtNDg1My04NjI5LTg1NTVkMjY2NTg3MyIsImZhbWlseV9uYW1lIjoiQ29iYWxlZGEiLCJnaXZlbl9uYW1lIjoiTGVvbmFyZG8iLCJpZHR5cCI6InVzZXIiLCJpcGFkZHIiOiIyMDAxOjQ4OTg6YTgwMDoxMDEwOjMyNDU6YTlhNTplZWRjOjQ5ZDQiLCJuYW1lIjoiTGVvbmFyZG8gQ29iYWxlZGEiLCJvaWQiOiI0ZjRjNDA4ZC01YzhkLTRiYWEtOTJhMS05YWQyMmU2ZDE2ZGMiLCJvbnByZW1fc2lkIjoiUy0xLTUtMjEtMjEyNzUyMTE4NC0xNjA0MDEyOTIwLTE4ODc5Mjc1MjctNzY2NTE3NTAiLCJwdWlkIjoiMTAwMzIwMDM3QTBGQTlBOCIsInJoIjoiMC5BUm9BdjRqNWN2R0dyMEdScXkxODBCSGJSMFpJZjNrQXV0ZFB1a1Bhd2ZqMk1CTWFBSlkuIiwic2NwIjoidXNlcl9pbXBlcnNvbmF0aW9uIiwic3ViIjoiWXBJeVNtZC13b0JCSzQyVVd0M3ZXajduSFNMdlhvdlBzZU52b0Ezck9mMCIsInRpZCI6IjcyZjk4OGJmLTg2ZjEtNDFhZi05MWFiLTJkN2NkMDExZGI0NyIsInVuaXF1ZV9uYW1lIjoidC1sY29iYWxlZGFAbWljcm9zb2Z0LmNvbSIsInVwbiI6InQtbGNvYmFsZWRhQG1pY3Jvc29mdC5jb20iLCJ1dGkiOiJRdHFteFlCZEhrUzZ2c0tlRHRJV0FBIiwidmVyIjoiMS4wIiwid2lkcyI6WyJiNzlmYmY0ZC0zZWY5LTQ2ODktODE0My03NmIxOTRlODU1MDkiXSwieG1zX2NhZSI6IjEiLCJ4bXNfY2MiOlsiQ1AxIl0sInhtc19maWx0ZXJfaW5kZXgiOlsiMjYiXSwieG1zX2lkcmVsIjoiOCAxIiwieG1zX3JkIjoiMC40MkxsWUJSaWxBSUEiLCJ4bXNfc3NtIjoiMSIsInhtc190Y2R0IjoxMjg5MjQxNTQ3fQ.VPEnkbKnJg2gwVWhucPxx2sJoYcsIvxxJ6FLOC43id5rb9Uri_GIJRVwY120cTjVIB3SViVAUa2kfPJZksyTkKkPH0zv7QYrHwE1WC1zP5CQeGHYgmL9tw8YU4lKB5ZtpTET7KHz8VOF9wvamLn5TrBQ1pD-7hYYbbkm0H2ibJfff1kJ-eJ0M9hWCEcH26k00U0PihxvhsN8YSWgO4SHyyUrPYS7eSOn9kJOR1rnyi1NYB5tfCDNvzYBJ3x2ZwuNMVRAOVzVqbrR49UrnMwTcQIWXfhu89yY_gjSpItTKmSLBghClfkddHjz-3kZpHtbx-iYCyErSowak-NyLDtyAQ",
                 //azToken = accessToken,
                 connectionType = "nativeclient"
             };
@@ -295,4 +307,3 @@ namespace Microsoft.Azure.Commands.Ssh
     }
 
     }
-#endregion

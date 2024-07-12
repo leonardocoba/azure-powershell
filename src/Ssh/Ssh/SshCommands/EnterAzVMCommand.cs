@@ -27,6 +27,7 @@ using Microsoft.Azure.Commands.Ssh.Properties;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity.Models;
 
 using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01.Models;
+using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
 namespace Microsoft.Azure.Commands.Ssh
 {
     [Cmdlet(
@@ -114,16 +115,15 @@ namespace Microsoft.Azure.Commands.Ssh
                 }
                 UpdateProgressBar(record, $"Completed Relay information setup", 60);
             }
-            CheckForBastionConnection();
             try
             {
                 if (LocalUser == null)
                 {
                     PrepareAadCredentials();
-                }
+               }
                 
-                record.RecordType = ProgressRecordType.Completed;
-                UpdateProgressBar(record, "Ready to start SSH connection.", 100);
+               record.RecordType = ProgressRecordType.Completed;
+               UpdateProgressBar(record, "Ready to start SSH connection.", 100);
 
 
                 int sshStatus = 0;
@@ -131,6 +131,10 @@ namespace Microsoft.Azure.Commands.Ssh
                 if (Rdp.IsPresent)
                 {
                     sshStatus = StartRDPConnection(sshProcess);
+                }
+                else if (Bastion != null){
+                    StartBastionConnection(sshProcess);
+
                 }
                 else
                 {
@@ -420,6 +424,13 @@ namespace Microsoft.Azure.Commands.Ssh
             if (SshArgument != null)
             {
                 Array.ForEach(SshArgument, item => argList.Add(item));
+            }
+            if (Bastion != null)
+            {
+                argList.Add("-p " + "22");
+                argList.Add("-o StrictHostKeyChecking=no");
+                argList.Add("-o UserKnownHostsFile=/dev/null");
+                argList.Add("-o LogLevel=Error");
             }
 
             return string.Join(" ", argList.ToArray());

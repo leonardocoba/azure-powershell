@@ -30,8 +30,10 @@ public class TunnelServer
 
     public async Task StartServerAsync()
     {
-        IPAddress localIPAddress = IPAddress.Parse(_localAddr);
+        IPAddress localIPAddress = Dns.GetHostAddresses(_localAddr)[0];
         TcpListener listener = new TcpListener(localIPAddress, _localPort);
+        listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+
         listener.Start();
         Console.WriteLine($"Listening on {_localAddr}:{_localPort}");
 
@@ -43,7 +45,7 @@ public class TunnelServer
             string authToken =  GetAuthTokenAsync();
 
             Uri serverUri = new Uri($"wss://{_bastionEndpoint}/webtunnel/{authToken}");
-            await _webSocket.ConnectAsync(serverUri, CancellationToken.None);
+            await _webSocket.ConnectAsync(serverUri, CancellationToken.None).ConfigureAwait(false);
             Console.WriteLine("Connected to WebSocket server.");
 
             Task receiveTask = ReceiveFromWebSocketAsync(client);
@@ -53,6 +55,7 @@ public class TunnelServer
 
             client.Close();
             _webSocket.Dispose();
+            _webSocket = new ClientWebSocket();
         }
     }
     public void StartServer()

@@ -134,11 +134,10 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                 {
                     continue;
                 }
-
+                foundNic = nic;
                 if (_firstPrivateIp == null) { _firstPrivateIp = GetFirstPrivateIp(nic); }
                 if (usePrivateIp && _firstPrivateIp != null)
                 {
-                    foundNic = nic;
                     return (_firstPrivateIp, foundNic);
                 }
                 if (!usePrivateIp && _firstPublicIp == null)
