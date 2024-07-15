@@ -133,7 +133,7 @@ namespace Microsoft.Azure.Commands.Ssh
                     sshStatus = StartRDPConnection(sshProcess);
                 }
                 else if (Bastion != null){
-                    StartBastionConnection(sshProcess);
+                    sshStatus = StartBastionConnection(sshProcess);
 
                 }
                 else
@@ -376,6 +376,7 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 return LocalUser + "@" + Ip;
             }
+            
             throw new AzPSInvalidOperationException("Unable to determine target host.");
         }
 

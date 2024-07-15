@@ -466,15 +466,16 @@ namespace Microsoft.Azure.Commands.Ssh
             ResourceType = types.ElementAt(0);
         }
 
-        protected void StartBastionConnection(Process sshProcess)
+        protected int StartBastionConnection(Process sshProcess)
            
         {
-            if (Bastion.IsPresent)
-            {
-                BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
+           
+            BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
 
-                bastionUtils.HandleBastionProperties(_networkInterface, ResourceGroupName, Name, DefaultProfile.DefaultContext, Port, sshProcess);
-            }
+            int sshExitCode = bastionUtils.HandleBastionProperties(_networkInterface, ResourceGroupName, Name, DefaultProfile.DefaultContext, Port, sshProcess);
+                
+            return sshExitCode;
+            
         }
         
         protected internal void UpdateProgressBar(
@@ -577,8 +578,8 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal void GetVmIpAddress()
         {
             string _message = "";
-
-            (string IpAdress, NetworkInterface networkInterface) = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp, out _message);
+           
+            (string IpAdress, NetworkInterface networkInterface) = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp,Bastion, out _message);
 
             Ip = IpAdress;
             _networkInterface = networkInterface;
@@ -589,10 +590,14 @@ namespace Microsoft.Azure.Commands.Ssh
                 WriteWarning($"{_message}. To avoid this message, use -UsePrivateIp.");
             }
 
-            if (Ip == null)
+            if (Ip == null && Bastion == false)
             {
-                string errorMessage = $"Couldn't determine the IP address of {Name} in the Resource Group {ResourceGroupName}.";
+                string errorMessage = $"Couldn't determine the IP address of {Name} in the Resource Group {ResourceGroupName} and Bastion Host was not created.";
                 throw new AzPSResourceNotFoundCloudException(errorMessage);
+            }
+            if (Bastion == true)
+            {
+                Ip = "localhost";
             }
         }
 

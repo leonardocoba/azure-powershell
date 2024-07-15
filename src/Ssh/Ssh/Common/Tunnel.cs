@@ -7,6 +7,13 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
+using Microsoft.Azure.Commands.Common.Exceptions;
+using Azure.Core;
+using Microsoft.Azure.Management.WebSites.Version2016_09_01.Models;
+using Newtonsoft.Json;
+using System.Net.Http;
+using System.Collections.Generic;
+using System.Management.Automation;
 
 
 public class TunnelServer
@@ -15,11 +22,18 @@ public class TunnelServer
     private int _localPort;
     private string _bastionEndpoint;
     private string _remoteHost;
+    private string _lastToken;
+    private string _nodeId;
+
+
     private int _remotePort;
     private ClientWebSocket _webSocket;
+    private IAzureContext _context;
+
 
     public TunnelServer(IAzureContext context, int localPort, BastionHost bastion, string bastionEndpoint, string remoteHost, int remotePort)
     {
+        _context = context;
         _localAddr = "localhost";
         _localPort = localPort;
         _bastionEndpoint = bastionEndpoint;
@@ -28,75 +42,134 @@ public class TunnelServer
         _webSocket = new ClientWebSocket();
     }
 
-    public async Task StartServerAsync()
+    public async Task StartBastionTunnelAsync()
     {
         IPAddress localIPAddress = Dns.GetHostAddresses(_localAddr)[0];
         TcpListener listener = new TcpListener(localIPAddress, _localPort);
         listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
         listener.Start();
-        Console.WriteLine($"Listening on {_localAddr}:{_localPort}");
-
-        while (true)
+        try
         {
-            TcpClient client = await listener.AcceptTcpClientAsync();
-            Console.WriteLine("Client connected.");
+            while (true)
+            {
+                TcpClient client = await listener.AcceptTcpClientAsync();
 
-            string authToken =  GetAuthTokenAsync();
+                string authToken = GetAuthTokenAsync();
 
-            Uri serverUri = new Uri($"wss://{_bastionEndpoint}/webtunnel/{authToken}");
-            await _webSocket.ConnectAsync(serverUri, CancellationToken.None).ConfigureAwait(false);
-            Console.WriteLine("Connected to WebSocket server.");
+                Uri serverUri = new Uri($"wss://{_bastionEndpoint}/omni/webtunnel/{authToken}");
 
-            Task receiveTask = ReceiveFromWebSocketAsync(client);
-            Task sendTask = SendToWebSocketAsync(client);
+                using (var webSocket = new ClientWebSocket())
+                {
+                    await webSocket.ConnectAsync(serverUri, CancellationToken.None).ConfigureAwait(false);
 
-            await Task.WhenAll(receiveTask, sendTask);
+                    Task receiveTask = ReceiveFromBastionWebSocketAsync(client, webSocket);
+                    Task sendTask = SendToBastionWebSocketAsync(client, webSocket);
 
-            client.Close();
-            _webSocket.Dispose();
-            _webSocket = new ClientWebSocket();
+                    await Task.WhenAll(receiveTask, sendTask);
+                }
+
+                client.Close();
+            }
         }
+        catch (Exception ex)
+        {
+            throw new AzPSCloudException($"An error occurred in the tunneling: {ex.Message}");
+        }
+        finally
+        {
+            listener.Stop();
+        }
+
     }
     public void StartServer()
     {
-        StartServerAsync().GetAwaiter().GetResult();
+        StartBastionTunnelAsync().GetAwaiter().GetResult();
     }
 
     private string GetAuthTokenAsync()
     {
-        return "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Ik1HTHFqOThWTkxvWGFGZnBKQ0JwZ0I0SmFLcyIsImtpZCI6Ik1HTHFqOThWTkxvWGFGZnBKQ0JwZ0I0SmFLcyJ9.eyJhdWQiOiJodHRwczovL21hbmFnZW1lbnQuY29yZS53aW5kb3dzLm5ldC8iLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC83MmY5ODhiZi04NmYxLTQxYWYtOTFhYi0yZDdjZDAxMWRiNDcvIiwiaWF0IjoxNzIwNzM4ODAxLCJuYmYiOjE3MjA3Mzg4MDEsImV4cCI6MTcyMDc0Mzk3MywiX2NsYWltX25hbWVzIjp7Imdyb3VwcyI6InNyYzEifSwiX2NsYWltX3NvdXJjZXMiOnsic3JjMSI6eyJlbmRwb2ludCI6Imh0dHBzOi8vZ3JhcGgud2luZG93cy5uZXQvNzJmOTg4YmYtODZmMS00MWFmLTkxYWItMmQ3Y2QwMTFkYjQ3L3VzZXJzLzRmNGM0MDhkLTVjOGQtNGJhYS05MmExLTlhZDIyZTZkMTZkYy9nZXRNZW1iZXJPYmplY3RzIn19LCJhY3IiOiIxIiwiYWlvIjoiQVpRQWEvOFhBQUFBWUNjVnVNZThKaUFlZmpMYWZpZGZIbjJqeWhxNTZBQnBFQi9iOC9ic3E4d3JRNXkxSkZGZVFTdGtTTXhvb2FpVStMTVJSM0hYVXNvbEdwL3NuLytpRC9XcHNtL05aSkI1eDJ5UGpCblkvdFovNkQwM0FkQlNncnQzTWw0cUI0WXBjN0pZWXpvemxtZm4zdUgxeUFKT0ZoaFdweGdzMjJ1YjMyano5cGp4TFZvd2oxMDM5Znpxc05FUG1LTDJLcmt2IiwiYW1yIjpbInJzYSIsIm1mYSJdLCJhcHBpZCI6IjA0YjA3Nzk1LThkZGItNDYxYS1iYmVlLTAyZjllMWJmN2I0NiIsImFwcGlkYWNyIjoiMCIsImNhcG9saWRzX2xhdGViaW5kIjpbIjI5Mzk5Y2Y5LTliNmItNDIwNS1iNWIzLTEzYTEzNGU5YjIzMyJdLCJkZXZpY2VpZCI6IjljNTU3Mjc3LTcwODYtNDg1My04NjI5LTg1NTVkMjY2NTg3MyIsImZhbWlseV9uYW1lIjoiQ29iYWxlZGEiLCJnaXZlbl9uYW1lIjoiTGVvbmFyZG8iLCJpZHR5cCI6InVzZXIiLCJpcGFkZHIiOiIyMDAxOjQ4OTg6YTgwMDoxMDEwOjhjM2Q6N2YyZTozNTM5OmVhMmYiLCJuYW1lIjoiTGVvbmFyZG8gQ29iYWxlZGEiLCJvaWQiOiI0ZjRjNDA4ZC01YzhkLTRiYWEtOTJhMS05YWQyMmU2ZDE2ZGMiLCJvbnByZW1fc2lkIjoiUy0xLTUtMjEtMjEyNzUyMTE4NC0xNjA0MDEyOTIwLTE4ODc5Mjc1MjctNzY2NTE3NTAiLCJwdWlkIjoiMTAwMzIwMDM3QTBGQTlBOCIsInJoIjoiMC5BUm9BdjRqNWN2R0dyMEdScXkxODBCSGJSMFpJZjNrQXV0ZFB1a1Bhd2ZqMk1CTWFBSlkuIiwic2NwIjoidXNlcl9pbXBlcnNvbmF0aW9uIiwic3ViIjoiWXBJeVNtZC13b0JCSzQyVVd0M3ZXajduSFNMdlhvdlBzZU52b0Ezck9mMCIsInRpZCI6IjcyZjk4OGJmLTg2ZjEtNDFhZi05MWFiLTJkN2NkMDExZGI0NyIsInVuaXF1ZV9uYW1lIjoidC1sY29iYWxlZGFAbWljcm9zb2Z0LmNvbSIsInVwbiI6InQtbGNvYmFsZWRhQG1pY3Jvc29mdC5jb20iLCJ1dGkiOiJUejlHQ2l0NU4wVzd1Z1lub0hITkFBIiwidmVyIjoiMS4wIiwid2lkcyI6WyJiNzlmYmY0ZC0zZWY5LTQ2ODktODE0My03NmIxOTRlODU1MDkiXSwieG1zX2NhZSI6IjEiLCJ4bXNfY2MiOlsiQ1AxIl0sInhtc19maWx0ZXJfaW5kZXgiOlsiMjYiXSwieG1zX2lkcmVsIjoiMSAyOCIsInhtc19yZCI6IjAuNDJMbFlCUmlsQUlBIiwieG1zX3NzbSI6IjEiLCJ4bXNfdGNkdCI6MTI4OTI0MTU0N30.qJaPF6NuMMwgirY_ZW42dnZblvG1Ym7m--cjq6Oq38IHAcIUQ1JHRMbMk63hkjJWOjCdVUwrXiia6Yc3pVR1Ssf2hcdU36IBLyNVSg7RUtqw5PsXRwDdtzyUZambed6OBbuTFJBtOjEcqnpOJCoj4c7BUZX9VCe5uzT1kBBP_ArSb_O2UK9T27TkHIqwNexX5Wh88snkpjGpQGqR3bz7N4FGx9M4sRJT7j66IFw3T96xkdQQQn--u3UOCDOH47j1wXgBoNIuLBtYc3lYKayJDIEF8xJsphctNpvD6z3i3IMBuTVikPwbIXF8ZWMxZTmyUJTgMJkSuv5yBc77Zt5C3w";
-
-    }
-
-    private async Task ReceiveFromWebSocketAsync(TcpClient client)
-    {
-        NetworkStream stream = client.GetStream();
-        byte[] buffer = new byte[4096];
-        while (_webSocket.State == WebSocketState.Open)
+        string accessToken= _context.Account.GetAccessToken();
+        
+        var content = new Dictionary<string, string>
         {
-            WebSocketReceiveResult result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-            if (result.MessageType == WebSocketMessageType.Close)
+            { "resourceId", _remoteHost },
+            { "protocol", "tcptunnel" },
+            { "workloadHostPort", _remotePort.ToString() },
+            { "aztoken", accessToken },
+            { "token", _lastToken }
+        };
+
+        var stringContent = new FormUrlEncodedContent(content);
+
+        var webAddress = $"https://{_bastionEndpoint}/api/tokens";
+        using (var client = new HttpClient())
+        {
+            client.DefaultRequestHeaders.Add("Connection", "close");
+            client.DefaultRequestHeaders.Add("User-Agent", "PowerShell");
+
+            if (!string.IsNullOrEmpty(_nodeId))
             {
-                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
+                client.DefaultRequestHeaders.Add("X-Node-Id", _nodeId);
+            }
+
+            HttpResponseMessage response = client.PostAsync(webAddress, stringContent).GetAwaiter().GetResult();
+            response.EnsureSuccessStatusCode();
+
+            string responseBody = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var responseJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(responseBody);
+
+            if (responseJson != null)
+            {
+                if (responseJson.ContainsKey("authToken") && responseJson["authToken"] != null)
+                {
+                    _lastToken = responseJson["authToken"].ToString();
+                }
+                if (responseJson.ContainsKey("nodeId") && responseJson["nodeId"] != null)
+                {
+                    _nodeId = responseJson["nodeId"].ToString();
+                }
             }
             else
             {
-                await stream.WriteAsync(buffer, 0, result.Count);
+                throw new AzPSCloudException("Invalid response from the server.");
+            }
+            return responseJson["websocketToken"].ToString();
+        }
+    }
+
+    private async Task ReceiveFromBastionWebSocketAsync(TcpClient client, ClientWebSocket webSocket)
+    {
+        var buffer = new byte[1024 * 4];
+        using (var networkStream = client.GetStream())
+        {
+            while (webSocket.State == WebSocketState.Open)
+            {
+                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
+                }
+                else
+                {
+                    await networkStream.WriteAsync(buffer, 0, result.Count);
+                }
             }
         }
     }
 
-    private async Task SendToWebSocketAsync(TcpClient client)
+    private async Task SendToBastionWebSocketAsync(TcpClient client, ClientWebSocket webSocket)
     {
-        NetworkStream stream = client.GetStream();
-        byte[] buffer = new byte[4096];
-        while (_webSocket.State == WebSocketState.Open)
+        var buffer = new byte[1024 * 4];
+        using (var networkStream = client.GetStream())
         {
-            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length);
-            if (bytesRead > 0)
+            while (webSocket.State == WebSocketState.Open)
             {
-                await _webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, bytesRead), WebSocketMessageType.Binary, true, CancellationToken.None);
+                var bytesRead = await networkStream.ReadAsync(buffer, 0, buffer.Length);
+                if (bytesRead > 0)
+                {
+                    await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, bytesRead), WebSocketMessageType.Binary, true, CancellationToken.None);
+                }
             }
         }
     }

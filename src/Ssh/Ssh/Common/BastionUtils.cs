@@ -78,7 +78,7 @@ namespace Microsoft.Azure.Commands.Ssh
             }
         }
         #endregion
-        public void HandleBastionProperties(NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context, string vmPort, Process sshProcess)
+        public int HandleBastionProperties(NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context, string vmPort, Process sshProcess)
         {
             // if (vmPort != "22" || vmPort != null)
             // {
@@ -132,8 +132,6 @@ namespace Microsoft.Azure.Commands.Ssh
 
 
                 bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
-                Console.WriteLine(bastionEndPoint);
-
                 
             }
             catch (Exception ex)
@@ -147,6 +145,11 @@ namespace Microsoft.Azure.Commands.Ssh
 
                 Thread tunnelThread = new Thread(() => tunnel.StartServer());
                 tunnelThread.Start();
+
+                sshProcess.Start();
+                sshProcess.WaitForExit();
+                int sshExitCode = sshProcess.ExitCode;
+                return sshExitCode;
             }
             catch (Exception ex)
             {
@@ -170,8 +173,8 @@ namespace Microsoft.Azure.Commands.Ssh
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching bastion: {ex.Message}");
-                throw;
+
+                throw new AzPSCloudException($"An error occurred while fetching bastion host: {ex.Message}");
             }
         }
 
@@ -211,8 +214,7 @@ namespace Microsoft.Azure.Commands.Ssh
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error creating bastion: {ex.Message}");
-                throw;
+                throw new AzPSCloudException($"Error creating bastion: {ex.Message}");
             }
             return this.BastionClient.Get(resourceGroupName, bastionName);
         }
