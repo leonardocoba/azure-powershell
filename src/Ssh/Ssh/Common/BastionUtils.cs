@@ -115,7 +115,7 @@ namespace Microsoft.Azure.Commands.Ssh
 
             if (bastionNameInVNet == null)
             {
-                string bastionName = resourceGroupName + "-vnet-bastion";
+                string bastionName = vNetName+ "-bastion";
 
                 bastion = CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetId);
 
