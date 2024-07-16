@@ -594,10 +594,6 @@ namespace Microsoft.Azure.Commands.Ssh
 
                 if (ShouldContinue(query, caption))
                 {
-                    if (Port != null && Port != "22")
-                    {
-                        throw new AzPSArgumentException("Invalid Port number. The Bastion Developer Sku does not allow for custom port numbers. Please use Port 22.", Port);
-                    }
                     Bastion = true;
                     Ip = "localhost";
 
@@ -612,6 +608,14 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 string errorMessage = $"Couldn't determine the IP address of {Name} in the Resource Group {ResourceGroupName} and Bastion Host was not created.";
                 throw new AzPSResourceNotFoundCloudException(errorMessage);
+            }
+
+            if (Bastion == true)
+            {
+                if (Port != null && Port != "22")
+                {
+                    throw new AzPSArgumentException("Invalid Port number. The Bastion Developer Sku does not allow for custom port numbers. Please use Port 22.", Port);
+                }
             }
         }
 
