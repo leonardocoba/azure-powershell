@@ -220,7 +220,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 
         protected void CheckValidBastionDeveloperLocation(string location)
         {
-            string[] validLocations = { "centralus", "eastus2", "westus", "northeurope", "northcentralus", "westcentralus" };
+            string[] validLocations = { "centraluseuap", "eastus2euap", "westus", "northeurope", "northcentralus", "westcentralus" };
 
             if (!Array.Exists(validLocations, element => element.Equals(location, StringComparison.OrdinalIgnoreCase)))
             {
