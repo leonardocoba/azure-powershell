@@ -23,7 +23,6 @@ public class TunnelServer
     private string _bastionEndpoint;
     private string _remoteHost;
     private string _lastToken;
-    private string _nodeId;
 
 
     private int _remotePort;
@@ -108,11 +107,6 @@ public class TunnelServer
             client.DefaultRequestHeaders.Add("Connection", "close");
             client.DefaultRequestHeaders.Add("User-Agent", "PowerShell");
 
-            if (!string.IsNullOrEmpty(_nodeId))
-            {
-                client.DefaultRequestHeaders.Add("X-Node-Id", _nodeId);
-            }
-
             HttpResponseMessage response = client.PostAsync(webAddress, stringContent).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
 
@@ -124,10 +118,6 @@ public class TunnelServer
                 if (responseJson.ContainsKey("authToken") && responseJson["authToken"] != null)
                 {
                     _lastToken = responseJson["authToken"].ToString();
-                }
-                if (responseJson.ContainsKey("nodeId") && responseJson["nodeId"] != null)
-                {
-                    _nodeId = responseJson["nodeId"].ToString();
                 }
             }
             else

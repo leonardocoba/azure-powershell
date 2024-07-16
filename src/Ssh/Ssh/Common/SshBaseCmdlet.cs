@@ -595,8 +595,6 @@ namespace Microsoft.Azure.Commands.Ssh
                 if (ShouldContinue(query, caption))
                 {
                     Bastion = true;
-                    Ip = "localhost";
-
                 }
                 else
                 {
@@ -612,6 +610,7 @@ namespace Microsoft.Azure.Commands.Ssh
 
             if (Bastion == true)
             {
+                Ip = "localhost";
                 if (Port != null && Port != "22")
                 {
                     throw new AzPSArgumentException("Invalid Port number. The Bastion Developer Sku does not allow for custom port numbers. Please use Port 22.", Port);
