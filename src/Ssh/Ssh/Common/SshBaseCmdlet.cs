@@ -584,7 +584,7 @@ namespace Microsoft.Azure.Commands.Ssh
             _networkInterface = networkInterface;
 
 
-            if (_message.StartsWith("Unable to find public IP.") && !UsePrivateIp)
+            if (_message.StartsWith("Unable to find public IP.") && !UsePrivateIp && !Bastion)
             {   
                 string query = ("There is no public IP associated with this VM."
                  + " Would you like to connect to your VM through Developer Bastion? To learn more,"
@@ -594,11 +594,13 @@ namespace Microsoft.Azure.Commands.Ssh
 
                 if (ShouldContinue(query, caption))
                 {
-                    Ip = "localhost";
                     if (Port != null && Port != "22")
                     {
                         throw new AzPSArgumentException("Invalid Port number. The Bastion Developer Sku does not allow for custom port numbers. Please use Port 22.", Port);
                     }
+                    Bastion = true;
+                    Ip = "localhost";
+
                 }
                 else
                 {
