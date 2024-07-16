@@ -471,8 +471,7 @@ namespace Microsoft.Azure.Commands.Ssh
         {
            
             BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
-
-            int sshExitCode = bastionUtils.HandleBastionProperties(_networkInterface, ResourceGroupName, Name, DefaultProfile.DefaultContext, Port, sshProcess);
+            int sshExitCode = bastionUtils.HandleBastionProperties(_networkInterface, Name, DefaultProfile.DefaultContext, Port, sshProcess);
                 
             return sshExitCode;
             
@@ -586,18 +585,31 @@ namespace Microsoft.Azure.Commands.Ssh
 
 
             if (_message.StartsWith("Unable to find public IP.") && !UsePrivateIp)
-            {
-                WriteWarning($"{_message}. To avoid this message, use -UsePrivateIp.");
+            {   
+                string query = ("There is no public IP associated with this VM."
+                 + " Would you like to connect to your VM through Developer Bastion? To learn more,"
+                + " please visit learn.microsoft.com/en-us/azure/bastion/quickstart-developer-sku");
+                string caption = "Create Developer Bastion";
+
+
+                if (ShouldContinue(query, caption))
+                {
+                    Ip = "localhost";
+                    if (Port != null && Port != "22")
+                    {
+                        throw new AzPSArgumentException("Invalid Port number. The Bastion Developer Sku does not allow for custom port numbers. Please use Port 22.", Port);
+                    }
+                }
+                else
+                {
+                    WriteWarning($"{_message}. To avoid this message, use -UsePrivateIp.");
+                }
             }
 
-            if (Ip == null && Bastion == false)
+            if (Ip == null)
             {
                 string errorMessage = $"Couldn't determine the IP address of {Name} in the Resource Group {ResourceGroupName} and Bastion Host was not created.";
                 throw new AzPSResourceNotFoundCloudException(errorMessage);
-            }
-            if (Bastion == true)
-            {
-                Ip = "localhost";
             }
         }
 
@@ -789,7 +801,9 @@ namespace Microsoft.Azure.Commands.Ssh
 
             // Need to come back to these messages
             if (!Force && !ShouldContinue(query, String.Format("Allow SSH connection to port {0}", port)))
+                
             {
+                
                 throw new AzPSApplicationException(String.Format(Resources.ServiceConfigCreateConfirmationDenied, port));
             }
 

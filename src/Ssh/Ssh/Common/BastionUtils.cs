@@ -13,8 +13,7 @@
 // ----------------------------------------------------------------------------------
 
 
-namespace Microsoft.Azure.Commands.Ssh
-{
+
     using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
     using Microsoft.Azure.PowerShell.Ssh.Helpers.Network;
 
@@ -44,6 +43,9 @@ namespace Microsoft.Azure.Commands.Ssh
     using System.Management.Automation.Language;
     using System.Diagnostics;
 
+namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
+
+    {
     internal class BastionUtils
     {
         #region Fields
@@ -78,12 +80,8 @@ namespace Microsoft.Azure.Commands.Ssh
             }
         }
         #endregion
-        public int HandleBastionProperties(NetworkInterface nic, string resourceGroupName, string vmName, IAzureContext context, string vmPort, Process sshProcess)
+        public int HandleBastionProperties(NetworkInterface nic, string vmName, IAzureContext context, string vmPort, Process sshProcess)
         {
-            // if (vmPort != "22" || vmPort != null)
-            // {
-            //throw new InvalidOperationException("SSH to Bastion host is only support for Developer Bastion Skus");
-            // }
             int port = 22;
             string location = nic.Location;
             CheckValidBastionDeveloperLocation(location);
@@ -93,6 +91,7 @@ namespace Microsoft.Azure.Commands.Ssh
 
             string vNetId = null;
             string vNetName = null;
+            string vNetResourceGroup = null;
             if (nic.IpConfigurations != null && nic.IpConfigurations.Any())
             {
                 foreach (var ipConfig in nic.IpConfigurations)
@@ -101,7 +100,7 @@ namespace Microsoft.Azure.Commands.Ssh
                     {
                         string subnetId = ipConfig.Subnet.Id;
 
-                        (vNetId, vNetName) = GetVNetDetailsFromSubnetId(subnetId);
+                        (vNetId, vNetName, vNetResourceGroup) = GetVNetDetailsFromSubnetId(subnetId);
                         break;
                     }
                 }
@@ -115,24 +114,23 @@ namespace Microsoft.Azure.Commands.Ssh
 
             if (bastionNameInVNet == null)
             {
-                string bastionName = vNetName+ "-bastion";
-
-                bastion = CreateDeveloperBastion(resourceGroupName, bastionName, location, vNetId);
+                string bastionName = vNetName + "-bastion";
+                bastion = CreateDeveloperBastion(vNetResourceGroup, bastionName, location, vNetId);
 
             }
             else
             {
-                bastion = FetchDeveloperBastion(resourceGroupName, bastionNameInVNet);
+                bastion = FetchDeveloperBastion(vNetResourceGroup, bastionNameInVNet);
 
             }
-            int bastionPort = 0;  // no custom ports for the bastion developer
+            int bastionPort = 0;  
             string bastionEndPoint = null;
             try
             {
 
 
                 bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
-                
+
             }
             catch (Exception ex)
             {
@@ -140,7 +138,8 @@ namespace Microsoft.Azure.Commands.Ssh
                 throw new AzPSCloudException(error);
             }
 
-            try {
+            try
+            {
                 TunnelServer tunnel = new TunnelServer(context, port, bastion, bastionEndPoint, vmSubscriptionID, bastionPort);
 
                 Thread tunnelThread = new Thread(() => tunnel.StartServer());
@@ -156,7 +155,7 @@ namespace Microsoft.Azure.Commands.Ssh
                 string error = "Error connecting to Bastion Host: " + ex.Message;
                 throw new AzPSCloudException(error);
             }
-            
+
         }
 
         public BastionHost FetchDeveloperBastion(string resourceGroupName, string name)
@@ -231,17 +230,26 @@ namespace Microsoft.Azure.Commands.Ssh
 
             }
         }
-        private (string vNetId, string vNetName) GetVNetDetailsFromSubnetId(string subnetId)
+        private (string vNetId, string vNetName, string resourceGroupName) GetVNetDetailsFromSubnetId(string subnetId)
         {
             var parts = subnetId.Split('/');
             int vNetIndex = Array.IndexOf(parts, "virtualNetworks");
+            int resourceGroupIndex = Array.IndexOf(parts, "resourceGroups");
+
             if (vNetIndex == -1 || vNetIndex >= parts.Length - 1)
             {
                 throw new ArgumentException("Invalid subnet ID", nameof(subnetId));
             }
+            if (resourceGroupIndex == -1 || resourceGroupIndex >= parts.Length - 1)
+            {
+                throw new ArgumentException("Invalid subnet ID", nameof(subnetId));
+            }
+
             string vNetName = parts[vNetIndex + 1];
             string vNetId = string.Join("/", parts.Take(vNetIndex + 2));
-            return (vNetId, vNetName);
+            string resourceGroupName = parts[resourceGroupIndex + 1];
+
+            return (vNetId, vNetName, resourceGroupName);
         }
 
         public static string ParseAvailableBastions(string bastionsFoundInVnet)
@@ -277,7 +285,7 @@ namespace Microsoft.Azure.Commands.Ssh
 
         public string GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
         {
-            string accessToken= context.Account.GetAccessToken();
+            string accessToken = context.Account.GetAccessToken();
             var content = new
             {
                 resourceId = virtualMachineId,
@@ -305,6 +313,6 @@ namespace Microsoft.Azure.Commands.Ssh
                 return responseBody;
             }
         }
-    }
 
+    }
     }

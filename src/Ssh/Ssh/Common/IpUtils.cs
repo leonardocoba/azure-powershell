@@ -19,9 +19,7 @@ using Microsoft.Azure.Management.Internal.Resources.Utilities.Models;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.Network;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
 using System.Linq;
-using System.Management.Automation;
 using Microsoft.Rest.Azure;
-
 namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 {
     internal class IpUtils
@@ -151,24 +149,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                     foundNic = nic;
                     return (_firstPublicIp, foundNic);
                 }
-                // else
-                // {
-                //string/ query = "There is no public IP associated with this VM."
-                // + " Would you like to connect to your VM through Developer Bastion? To learn more,"
-                // + " please visit learn.microsoft.com/en-us/azure/bastion/quickstart-developer-sku");
-                //string caption = "Bastion Developer Sku:";
-                //if (ShouldContinue(query, caption))
-
-                //bastion = true;
-                // return (null, foundNic);
-
-
-                // }
-                else
-                {
-                    bastion = true;
-                    return (null, foundNic);
-                }
+               
             }
 
              

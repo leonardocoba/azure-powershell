@@ -21,6 +21,7 @@ using Microsoft.Azure.PowerShell.Ssh.Helpers.ResourceGraph;
 
 using Microsoft.Azure.PowerShell.Ssh.Helpers.ResourceGraph.Models;
 using Newtonsoft.Json;
+using Microsoft.Azure.Commands.Common.Exceptions;
 
 namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 {
@@ -70,15 +71,8 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error executing Resource Graph query: {ex.Message}");
-                return null;
+                throw new AzPSCloudException($"Error querying specific Bastion: {ex.Message}");
             }
-
-            if (response.ResultTruncated == ResultTruncated.True)
-            {
-                Console.WriteLine("Warning: Result is truncated.");
-            }
-            Console.WriteLine(JsonConvert.SerializeObject(response));
             return JsonConvert.SerializeObject(response);
         }
     }
