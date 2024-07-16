@@ -578,9 +578,9 @@ namespace Microsoft.Azure.Commands.Ssh
         {
             string _message = "";
            
-            (string IpAdress, NetworkInterface networkInterface) = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp,Bastion, out _message);
+            (string IpAddress, NetworkInterface networkInterface) = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp,Bastion, out _message);
 
-            Ip = IpAdress;
+            Ip = IpAddress;
             _networkInterface = networkInterface;
 
 
@@ -591,10 +591,11 @@ namespace Microsoft.Azure.Commands.Ssh
                 + " please visit learn.microsoft.com/en-us/azure/bastion/quickstart-developer-sku");
                 string caption = "Create Developer Bastion";
 
-
                 if (ShouldContinue(query, caption))
                 {
                     Bastion = true;
+                    WriteWarning("To avoid this question, use -Bastion.");
+
                 }
                 else
                 {

@@ -127,8 +127,6 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             string bastionEndPoint = null;
             try
             {
-
-
                 bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
 
             }
@@ -148,6 +146,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                 sshProcess.Start();
                 sshProcess.WaitForExit();
                 int sshExitCode = sshProcess.ExitCode;
+
                 return sshExitCode;
             }
             catch (Exception ex)

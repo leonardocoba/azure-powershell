@@ -14,6 +14,7 @@ using Newtonsoft.Json;
 using System.Net.Http;
 using System.Collections.Generic;
 using System.Management.Automation;
+using System.ComponentModel;
 
 
 public class TunnelServer
@@ -33,10 +34,11 @@ public class TunnelServer
     public TunnelServer(IAzureContext context, int localPort, BastionHost bastion, string bastionEndpoint, string remoteHost, int remotePort)
     {
         _context = context;
-        _localAddr = "localhost";
-        _localPort = localPort;
-        _bastionEndpoint = bastionEndpoint;
-        _remoteHost = remoteHost;
+        _localAddr = "localhost";  // Local address for TCP listener
+        _localPort = localPort;  // Local port for TCP listener
+        _bastionEndpoint = bastionEndpoint;  // Bastion endpoint for WebSocket connection
+        _remoteHost = remoteHost;  // Remote host to connect to
+        _remotePort = remotePort;  // Remote port on the remote hos
         _remotePort = remotePort;
         _webSocket = new ClientWebSocket();
     }
@@ -52,6 +54,7 @@ public class TunnelServer
         {
             while (true)
             {
+                // Accepts incoming TCP client connection
                 TcpClient client = await listener.AcceptTcpClientAsync();
 
                 string authToken = GetAuthTokenAsync();
@@ -60,12 +63,20 @@ public class TunnelServer
 
                 using (var webSocket = new ClientWebSocket())
                 {
-                    await webSocket.ConnectAsync(serverUri, CancellationToken.None).ConfigureAwait(false);
+                    try
+                    {
+                        await webSocket.ConnectAsync(serverUri, CancellationToken.None).ConfigureAwait(false);
 
-                    Task receiveTask = ReceiveFromBastionWebSocketAsync(client, webSocket);
-                    Task sendTask = SendToBastionWebSocketAsync(client, webSocket);
+                        Task receiveTask = ReceiveFromBastionWebSocketAsync(client, webSocket);
+                        Task sendTask = SendToBastionWebSocketAsync(client, webSocket);
 
-                    await Task.WhenAll(receiveTask, sendTask);
+                        await Task.WhenAll(receiveTask, sendTask);
+                    }
+                    catch (WebSocketException ex)
+                    {
+                        Console.WriteLine($"WebSocket error: {ex.Message}"); 
+                        await webSocket.CloseAsync(WebSocketCloseStatus.InternalServerError, "WebSocket error", CancellationToken.None);
+                    }
                 }
 
                 client.Close();
@@ -79,7 +90,6 @@ public class TunnelServer
         {
             listener.Stop();
         }
-
     }
     public void StartServer()
     {
@@ -130,7 +140,7 @@ public class TunnelServer
 
     private async Task ReceiveFromBastionWebSocketAsync(TcpClient client, ClientWebSocket webSocket)
     {
-        var buffer = new byte[1024 * 4];
+        var buffer = new byte[1024 * 4]; // Buffer to hold data
         using (var networkStream = client.GetStream())
         {
             while (webSocket.State == WebSocketState.Open)
@@ -141,9 +151,10 @@ public class TunnelServer
                     await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
                 }
                 else
-                {
-                    await networkStream.WriteAsync(buffer, 0, result.Count);
+                { 
+                    await networkStream.WriteAsync(buffer, 0, result.Count); //Write data to TCP client
                 }
+            
             }
         }
     }
@@ -158,7 +169,7 @@ public class TunnelServer
                 var bytesRead = await networkStream.ReadAsync(buffer, 0, buffer.Length);
                 if (bytesRead > 0)
                 {
-                    await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, bytesRead), WebSocketMessageType.Binary, true, CancellationToken.None);
+                    await webSocket.SendAsync(new ArraySegment<byte>(buffer, 0, bytesRead), WebSocketMessageType.Binary, true, CancellationToken.None); //Send data to WebSocket
                 }
             }
         }
