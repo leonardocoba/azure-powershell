@@ -18,10 +18,19 @@ using Microsoft.Azure.Commands.Common.Authentication.Abstractions.Models;
 using Microsoft.Azure.Commands.Common.Exceptions;
 using Microsoft.Azure.Commands.ResourceManager.Common;
 using Microsoft.Azure.Commands.ResourceManager.Common.ArgumentCompleters;
-using Microsoft.Azure.Management.Internal.Resources.Utilities.Models;
-using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
 using Microsoft.Azure.Commands.Ssh.Properties;
+using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01;
+using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01.Models;
+using Microsoft.Azure.Management.Internal.Resources.Utilities.Models;
+using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
+using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute.Models;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity.Models;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
+using Microsoft.Rest.Azure;
+using Microsoft.Rest.Azure.OData;
 using Microsoft.WindowsAzure.Commands.Utilities.Common;
 using System;
 using System.Collections.Generic;
@@ -29,22 +38,13 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01;
-using Microsoft.Rest.Azure.OData;
-using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01.Models;
-using Microsoft.Rest.Azure;
-using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity;
-using System.Management.Automation.Runspaces;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute.Models;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
-using System.Reflection;
+
 
 
 
@@ -490,7 +490,7 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal EndpointAccessResource GetRelayInformation()
         {
             SetResourceId();
-            EndpointAccessResource cred;  
+            EndpointAccessResource cred;
 
             try
             {
@@ -578,13 +578,13 @@ namespace Microsoft.Azure.Commands.Ssh
         {
             string _message = "";
            
-            (string IpAddress, NetworkInterface networkInterface) = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp,Bastion, out _message);
+            (string IpAddress, NetworkInterface networkInterface, bool foundPublicIp) = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp, Bastion, out _message);
 
             Ip = IpAddress;
             _networkInterface = networkInterface;
 
 
-            if (_message.StartsWith("Unable to find public IP.") && !UsePrivateIp && !Bastion)
+            if (!foundPublicIp && !UsePrivateIp && !Bastion)
             {   
                 string query = ("There is no public IP associated with this VM."
                  + " Would you like to connect to your VM through Developer Bastion? To learn more,"
@@ -603,12 +603,6 @@ namespace Microsoft.Azure.Commands.Ssh
                 }
             }
 
-            if (Ip == null)
-            {
-                string errorMessage = $"Couldn't determine the IP address of {Name} in the Resource Group {ResourceGroupName} and Bastion Host was not created.";
-                throw new AzPSResourceNotFoundCloudException(errorMessage);
-            }
-
             if (Bastion == true)
             {
                 Ip = "localhost";
@@ -616,6 +610,12 @@ namespace Microsoft.Azure.Commands.Ssh
                 {
                     throw new AzPSArgumentException("Invalid Port number. The Bastion Developer Sku does not allow for custom port numbers. Please use Port 22.", Port);
                 }
+            }
+
+            if (Ip == null)
+            {
+                string errorMessage = $"Couldn't determine the IP address of {Name} in the Resource Group {ResourceGroupName} and Bastion Host was not created.";
+                throw new AzPSResourceNotFoundCloudException(errorMessage);
             }
         }
 

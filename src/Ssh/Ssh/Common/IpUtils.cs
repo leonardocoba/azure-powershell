@@ -102,7 +102,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         /// <param name="message">Hint message when public IP is not available</param>
         /// <param name="bastion">Bastion Flag</param>
         /// <returns>string containing the ip address and network interface</returns>
-        public (string IpAddress, NetworkInterface Nic) GetIpAddress(
+        public (string IpAddress, NetworkInterface Nic, bool foundPublicIp) GetIpAddress(
             string vmName, 
             string rgName,
             bool usePrivateIp,
@@ -111,8 +111,9 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         {
             string _firstPrivateIp = null;
             string _firstPublicIp = null;
+            bool foundPublicIp = false;
             message = "";
-            NetworkInterface foundNic = null;
+            NetworkInterface nic = null;
 
 
             var result = this.VirtualMachineClient.GetWithHttpMessagesAsync(
@@ -122,7 +123,6 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             foreach (var nicReference in vm.NetworkProfile.NetworkInterfaces)
             {
                 ResourceIdentifier parsedNicId = new ResourceIdentifier(nicReference.Id);
-                NetworkInterface nic;
 
                 try
                 {
@@ -134,11 +134,10 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                 {
                     continue;
                 }
-                foundNic = nic;
                 if (_firstPrivateIp == null) { _firstPrivateIp = GetFirstPrivateIp(nic); }
                 if (usePrivateIp && _firstPrivateIp != null)
                 {
-                    return (_firstPrivateIp, foundNic);
+                    return (_firstPrivateIp, nic, foundPublicIp);
                 }
                 if (!usePrivateIp && _firstPublicIp == null)
                 {
@@ -146,8 +145,8 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                 }
                 if (!usePrivateIp && _firstPublicIp != null)
                 {
-                    foundNic = nic;
-                    return (_firstPublicIp, foundNic);
+                    foundPublicIp = true;
+                    return (_firstPublicIp, nic, foundPublicIp);
                 }
                
             }
@@ -157,10 +156,10 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             if (!usePrivateIp && _firstPrivateIp != null)
             {
                 message = $"Unable to find public IP. Attempting to connect to private IP {_firstPrivateIp}";
-                return (_firstPrivateIp, foundNic);
+                return (_firstPrivateIp, nic, foundPublicIp);
             }
 
-            return (null, foundNic);
+            return (null, nic, foundPublicIp);
         }
 
         #endregion
