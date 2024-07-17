@@ -14,7 +14,6 @@
 
 
 
-    using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
     using Microsoft.Azure.PowerShell.Ssh.Helpers.Network;
 
 
@@ -43,6 +42,7 @@
     using System.Management.Automation.Language;
     using System.Diagnostics;
 using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
+using Microsoft.Azure.Commands.Common.Exceptions;
 
 namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 
