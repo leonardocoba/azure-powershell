@@ -42,6 +42,7 @@
     using Newtonsoft.Json.Linq;
     using System.Management.Automation.Language;
     using System.Diagnostics;
+using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
 
 namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 
@@ -82,9 +83,16 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         #endregion
         public int HandleBastionProperties(NetworkInterface nic, string vmName, IAzureContext context, string vmPort, Process sshProcess)
         {
+            
+            string location;
             int port = 22;
-            string location = nic.Location;
-            CheckValidBastionDeveloperLocation(location);
+            if (CheckValidBastionDeveloperLocation(nic.Location) == false)
+            {
+                string error = ($"The Bastion Developer Sku is not currently available in the specified region." +
+                     $"Learn more here: https://learn.microsoft.com/en-us/azure/bastion/configuration-settings");
+                throw new AzPSCloudException(error);
+            }
+            location = nic.Location;
 
             string vmSubscriptionID = nic.VirtualMachine.Id;
 
@@ -217,17 +225,15 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             return this.BastionClient.Get(resourceGroupName, bastionName);
         }
 
-        protected void CheckValidBastionDeveloperLocation(string location)
+        protected bool CheckValidBastionDeveloperLocation(string location)
         {
             string[] validLocations = { "centraluseuap", "eastus2euap", "westus", "northeurope", "northcentralus", "westcentralus" };
 
             if (!Array.Exists(validLocations, element => element.Equals(location, StringComparison.OrdinalIgnoreCase)))
             {
-                string error = ($"The Bastion Developer Sku is not currently available in the specified region." +
-                    $"Learn more here: https://learn.microsoft.com/en-us/azure/bastion/configuration-settings");
-                throw new AzPSCloudException(error);
-
+                return false;
             }
+            return true;
         }
         private (string vNetId, string vNetName, string resourceGroupName) GetVNetDetailsFromSubnetId(string subnetId)
         {
