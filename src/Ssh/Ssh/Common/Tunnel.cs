@@ -82,14 +82,17 @@ public class TunnelServer
                 client.Close();
             }
         }
-        catch (Exception ex)
+      
+        catch (Exception ex) when (!(ex is TaskCanceledException))
         {
             throw new AzPSCloudException($"An error occurred in the tunneling: {ex.Message}");
         }
         finally
         {
             listener.Stop();
+            _webSocket.Dispose();
         }
+
     }
     public void StartServer()
     {
@@ -140,7 +143,18 @@ public class TunnelServer
 
     private async Task ReceiveFromBastionWebSocketAsync(TcpClient client, ClientWebSocket webSocket)
     {
-        var buffer = new byte[1024 * 4]; // Buffer to hold data
+        // The buffer size of 4 KB (4096 bytes) was chosen for the following reasons:
+        // 1. Performance and Memory Balance:
+        //    A 4 KB buffer size strikes an optimal balance between performance and memory usage. Larger buffers can consume 
+        //    more memory and smaller buffers might result in more read/write operations which can degrade performance.
+        // 2. Network Efficiency: 
+        //    4 KB is a commonly used buffer size that aligns well with typical TCP packet sizes, helping to reduce fragmentation and 
+        //    reassembly overhead.
+        // 3. Consistency with Azure CLI: 
+        //    This buffer size is consistent with the buffer size used by the Azure CLI bastion extension.
+
+
+        var buffer = new byte[1024 * 4]; // Buffer for data transfer (4 KB)
         using (var networkStream = client.GetStream())
         {
             while (webSocket.State == WebSocketState.Open)
@@ -161,7 +175,7 @@ public class TunnelServer
 
     private async Task SendToBastionWebSocketAsync(TcpClient client, ClientWebSocket webSocket)
     {
-        var buffer = new byte[1024 * 4];
+        var buffer = new byte[1024 * 4]; // Buffer for data transfer (4 KB)
         using (var networkStream = client.GetStream())
         {
             while (webSocket.State == WebSocketState.Open)

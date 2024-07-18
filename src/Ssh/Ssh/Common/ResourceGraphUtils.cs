@@ -12,16 +12,14 @@
 // limitations under the License.
 // ----------------------------------------------------------------------------------
 
-using System;
-
-using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
 using Microsoft.Azure.Commands.Common.Authentication;
-
+using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
+using Microsoft.Azure.Commands.Common.Exceptions;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.ResourceGraph;
-
 using Microsoft.Azure.PowerShell.Ssh.Helpers.ResourceGraph.Models;
 using Newtonsoft.Json;
-using Microsoft.Azure.Commands.Common.Exceptions;
+using System;
+
 
 namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 {

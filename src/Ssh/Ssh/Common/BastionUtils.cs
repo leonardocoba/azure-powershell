@@ -14,44 +14,32 @@
 
 
 
-    using Microsoft.Azure.PowerShell.Ssh.Helpers.Network;
-
-
-    using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
-    using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
-    using Microsoft.Azure.PowerShell.Ssh.Helpers.Compute;
-    using Newtonsoft.Json;
-
-    
-    using Microsoft.Azure.Management.Internal.Resources.Utilities.Models;
-    using System.Linq;
-    using Microsoft.Rest.Azure;
-    using System;
-    using System.Management.Automation;
-    using System.Net;
-    using Microsoft.Azure.Commands.ResourceManager.Common.Tags;
-    using System.Collections.Generic;
-    using Microsoft.Azure.Commands.Common.Exceptions;
-    using System.Reflection;
-    using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
-    using Microsoft.Azure.Management.WebSites.Version2016_09_01.Models;
-    using System.Net.Http;
-    using System.Text;
-    using System.Threading;
-    using Newtonsoft.Json.Linq;
-    using System.Management.Automation.Language;
-    using System.Diagnostics;
 using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
 using Microsoft.Azure.Commands.Common.Exceptions;
+using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.Compute;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.Network;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
 
 namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 
-    {
+{
     internal class BastionUtils
     {
         #region Fields
         private NetworkClient _networkClient;
         private IAzureContext _context;
+        public const string _bastionDevloperSku = "Developer";
+
         #endregion
 
         public BastionUtils(IAzureContext context)
@@ -115,8 +103,8 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             }
             ResourceGraphUtils resourceGraphUtils = new ResourceGraphUtils(context);
             string bastionsFoundInVNet = resourceGraphUtils.QueryResourceGraph(vNetId);
-            string bastionNameInVNet = ParseAvailableBastions(bastionsFoundInVNet);
 
+            string bastionNameInVNet = ParseAvailableBastions(bastionsFoundInVNet);
             BastionHost bastion;
 
 
@@ -140,8 +128,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             }
             catch (Exception ex)
             {
-                string error = "Error fetching end point: " + ex.Message;
-                throw new AzPSCloudException(error);
+                throw new AzPSCloudException($"Error fetching bastion end point: {ex.Message}");
             }
 
             try
@@ -170,7 +157,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             try
             {
                 var bastion = this.BastionClient.Get(resourceGroupName, name);
-                if (bastion.Sku.Name != "Developer")
+                if (bastion.Sku.Name != _bastionDevloperSku)
                 {
                     throw new InvalidOperationException("SSH to Bastion host is only support for Developer Bastion Skus");
                 }
@@ -193,7 +180,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 
             var sku = new Sku
             {
-                Name = "Developer"
+                Name = _bastionDevloperSku
             };
 
             var bastion = new BastionHost
@@ -272,7 +259,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             if (bastion != null && bastion["sku"] != null && bastion["sku"]["name"] != null)
             {
                 string skuName = bastion["sku"]["name"].ToString();
-                if (skuName != "Developer")
+                if (skuName != _bastionDevloperSku)
                 {
                     throw new InvalidOperationException("SSH to Bastion host is only support for Developer Bastion Skus");
 
@@ -320,4 +307,4 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         }
 
     }
-    }
+}
