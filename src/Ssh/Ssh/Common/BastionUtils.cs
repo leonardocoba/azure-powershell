@@ -71,36 +71,53 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         #endregion
         public int HandleBastionProperties(NetworkInterface nic, string vmName, IAzureContext context, string vmPort, Process sshProcess)
         {
-            
-            string location;
+            if ( nic == null)
+            {
+                throw new AzPSCloudException("Failed retreving the Network Interface of the Vm.");
+            }
             int port = 22;
+
             if (CheckValidBastionDeveloperLocation(nic.Location) == false)
             {
                 string error = ($"The Bastion Developer Sku is not currently available in the specified region." +
                      $"Learn more here: https://learn.microsoft.com/en-us/azure/bastion/configuration-settings");
                 throw new AzPSCloudException(error);
             }
-            location = nic.Location;
+            string location = nic.Location;
 
             string vmSubscriptionID = nic.VirtualMachine.Id;
 
-
-            string vNetId = null;
-            string vNetName = null;
-            string vNetResourceGroup = null;
-            if (nic.IpConfigurations != null && nic.IpConfigurations.Any())
+            string vNetId = string.Empty;
+            string vNetName = string.Empty;
+            string vNetResourceGroup = string.Empty;
+            if (nic?.IpConfigurations?.Any() == true)
             {
-                foreach (var ipConfig in nic.IpConfigurations)
+                var ipConfig = nic.IpConfigurations.FirstOrDefault(ip => !string.IsNullOrEmpty(ip?.Subnet?.Id));
+                if (ipConfig != null)
                 {
-                    if (ipConfig.Subnet != null)
-                    {
-                        string subnetId = ipConfig.Subnet.Id;
+                    string subnetId = ipConfig.Subnet.Id;
 
-                        (vNetId, vNetName, vNetResourceGroup) = GetVNetDetailsFromSubnetId(subnetId);
-                        break;
+                    try
+                    {
+                        var (vNetIdResult, vNetNameResult, vNetResourceGroupResult) = GetVNetDetailsFromSubnetId(subnetId);
+
+                        vNetId = vNetIdResult ?? string.Empty;
+                        vNetName = vNetNameResult ?? string.Empty;
+                        vNetResourceGroup = vNetResourceGroupResult ?? string.Empty;
                     }
+                    catch (Exception ex)
+                    {
+                        throw new AzPSCloudException($"An error occurred while retrieving VNet details: {ex.Message}");
+                    }
+                        
                 }
             }
+            if (string.IsNullOrEmpty(vNetId) || string.IsNullOrEmpty(vNetName) || string.IsNullOrEmpty(vNetResourceGroup))
+            {
+                throw new InvalidOperationException("Failed to retrieve valid VNet details from the subnet ID.");
+            }
+
+
             ResourceGraphUtils resourceGraphUtils = new ResourceGraphUtils(context);
             string bastionsFoundInVNet = resourceGraphUtils.QueryResourceGraph(vNetId);
 
@@ -248,6 +265,10 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         {
             var jsonObject = JObject.Parse(bastionsFoundInVnet);
 
+            if (!jsonObject.ContainsKey("count"))
+            {
+                throw new AzPSCloudException("Error fetching bastion");
+            }
             int count = (int)jsonObject["count"];
 
             if (count == 0)

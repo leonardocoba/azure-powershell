@@ -59,8 +59,9 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal const string InteractiveParameterSet = "Interactive";
         protected internal const string ResourceIdParameterSet = "ResourceId";
         protected internal const string IpAddressParameterSet = "IpAddress";
-
         private const int RelayInfoExpirationInSec = 3600;
+        private const string BastionQuickstartUrl = "https://learn.microsoft.com/azure/bastion/quickstart-developer-sku";
+
         #endregion
 
         #region Fields
@@ -588,7 +589,7 @@ namespace Microsoft.Azure.Commands.Ssh
             {   
                 string query = ("There is no public IP associated with this VM."
                  + " Would you like to connect to your VM through Developer Bastion? To learn more,"
-                + " please visit learn.microsoft.com/en-us/azure/bastion/quickstart-developer-sku");
+                + $" please visit {BastionQuickstartUrl}");
                 string caption = "Create Developer Bastion";
 
                 if (ShouldContinue(query, caption))
