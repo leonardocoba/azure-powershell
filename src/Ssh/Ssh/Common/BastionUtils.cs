@@ -297,7 +297,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 
 
 
-        public string GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
+        public string GetDataPodEndPoint(BastionHost bastion, string virtualMachineId, int resourcePort)
         {
             IAccessToken accessToken = AzureSession.Instance.AuthenticationFactory.Authenticate(
                                             _context.Account,
