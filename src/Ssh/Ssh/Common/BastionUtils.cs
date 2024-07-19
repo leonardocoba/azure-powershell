@@ -14,6 +14,7 @@
 
 
 
+using Microsoft.Azure.Commands.Common.Authentication;
 using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
 using Microsoft.Azure.Commands.Common.Exceptions;
 using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
@@ -140,7 +141,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             string bastionEndPoint = null;
             try
             {
-                bastionEndPoint = GetDataPodEndPoint(bastion, context, vmSubscriptionID, port);
+                bastionEndPoint = GetDataPodEndPoint(bastion, vmSubscriptionID, port);
 
             }
             catch (Exception ex)
@@ -298,7 +299,15 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 
         public string GetDataPodEndPoint(BastionHost bastion, IAzureContext context, string virtualMachineId, int resourcePort)
         {
-            string accessToken = context.Account.GetAccessToken();
+            IAccessToken accessToken = AzureSession.Instance.AuthenticationFactory.Authenticate(
+                                            _context.Account,
+                                            _context.Environment,
+                                            _context.Tenant?.Id,
+                                            null,
+                                            ShowDialog.Never,
+                                            null,
+                                            null
+                                            ); 
             var content = new
             {
                 resourceId = virtualMachineId,
