@@ -123,7 +123,6 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             foreach (var nicReference in vm.NetworkProfile.NetworkInterfaces)
             {
                 ResourceIdentifier parsedNicId = new ResourceIdentifier(nicReference.Id);
-
                 try
                 {
                     nic = this.NetworkInterfacesClient.GetWithHttpMessagesAsync(

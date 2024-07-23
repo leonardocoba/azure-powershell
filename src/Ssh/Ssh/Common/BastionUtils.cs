@@ -76,7 +76,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             {
                 throw new AzPSCloudException("Failed retreving the Network Interface of the Vm.");
             }
-            int port = 22;
+            int port = 0;
 
             if (CheckValidBastionDeveloperLocation(nic.Location) == false)
             {
@@ -137,11 +137,11 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                 bastion = FetchDeveloperBastion(vNetResourceGroup, bastionNameInVNet);
 
             }
-            int bastionPort = 0;  
+            int bastionPort = 22;  
             string bastionEndPoint = null;
             try
             {
-                bastionEndPoint = GetDataPodEndPoint(bastion, vmSubscriptionID, port);
+                bastionEndPoint = GetDataPodEndPoint(bastion, vmSubscriptionID, bastionPort);
 
             }
             catch (Exception ex)

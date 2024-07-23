@@ -51,8 +51,8 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         public string QueryResourceGraph(string vNetID)
         {
             string query = $"Resources | where type =~ 'Microsoft.Network/bastionHosts' and (properties.ipConfigurations[0].properties.subnet.id startswith '{vNetID}/' or properties.virtualNetwork.id =~ '{vNetID}') " +
-                "| project id, location, name, sku, properties, type, vnetid = '{vNetID}' " +
-                "| union (Resources | where id =~ '{vNetID}' " +
+                $"| project id, location, name, sku, properties, type, vnetid = '{vNetID}' " +
+                $"| union (Resources | where id =~ '{vNetID}' " +
                 "| mv-expand peering = properties.virtualNetworkPeerings limit 400 " +
                 "| project vnetid = tolower(tostring(peering.properties.remoteVirtualNetwork.id)) " +
                 "| join kind = inner (Resources | where type =~ 'microsoft.network/bastionHosts' " +

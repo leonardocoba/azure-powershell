@@ -35,7 +35,9 @@ public class TunnelServer
     {
         _context = context;
         _localAddr = "localhost";  // Local address for TCP listener
-        _localPort = localPort;  // Local port for TCP listener
+        _localPort = localPort == 0 ? GetAvailablePort() : localPort;  // Automatically select an available port if localPort is 0
+
+        Console.WriteLine($"Assigned local port: {_localPort}");
         _bastionEndpoint = bastionEndpoint;  // Bastion endpoint for WebSocket connection
         _remoteHost = remoteHost;  // Remote host to connect to
         _remotePort = remotePort;  // Remote port on the remote hos
@@ -187,5 +189,15 @@ public class TunnelServer
                 }
             }
         }
+    }
+    private int GetAvailablePort()
+    {
+        int availablePort;
+        using (Socket tempSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+        {
+            tempSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0)); // Bind to an available port
+            availablePort = ((IPEndPoint)tempSocket.LocalEndPoint).Port;
+        }
+        return availablePort;
     }
 }
