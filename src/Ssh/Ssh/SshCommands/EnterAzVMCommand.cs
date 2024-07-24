@@ -63,6 +63,7 @@ namespace Microsoft.Azure.Commands.Ssh
         #region constants
         private const int retryDelayInSec = 10;
         private const int ServiceConfigDelayInSec = 15;
+        private int _localPort;
         #endregion
 
         #region Properties
@@ -127,13 +128,23 @@ namespace Microsoft.Azure.Commands.Ssh
 
 
                 int sshStatus = 0;
-                Process sshProcess = CreateSSHProcess();
+                Process sshProcess = null;
+                if (Bastion == null)
+                {
+                    sshProcess = CreateSSHProcess();
+                }
+
                 if (Rdp.IsPresent)
                 {
                     sshStatus = StartRDPConnection(sshProcess);
                 }
                 else if (Bastion != null){
-                    sshStatus = StartBastionConnection(sshProcess);
+                    _localPort =  GetAvailablePort();
+                    Thread BastionTCPTunnel = StartBastionConnection(_localPort);
+                    BastionTCPTunnel.Start();
+
+                    sshProcess = CreateSSHProcess();
+                    sshStatus = StartSSHConnection(sshProcess, false);
 
                 }
                 else
@@ -426,13 +437,13 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 Array.ForEach(SshArgument, item => argList.Add(item));
             }
-            if (Bastion != null)
+           if (Bastion != null)
             {
-                argList.Add("-p " + "22");
+                argList.Add($"-p {_localPort}");
                 argList.Add("-o StrictHostKeyChecking=no");
                 argList.Add("-o UserKnownHostsFile=/dev/null");
                 argList.Add("-o LogLevel=Error");
-            }
+           }
 
             return string.Join(" ", argList.ToArray());
         }

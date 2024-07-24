@@ -40,10 +40,12 @@ using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 
 
@@ -467,17 +469,29 @@ namespace Microsoft.Azure.Commands.Ssh
             ResourceType = types.ElementAt(0);
         }
 
-        protected int StartBastionConnection(Process sshProcess)
+        protected Thread StartBastionConnection( int localPort)
            
         {
            
             BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
-            int sshExitCode = bastionUtils.HandleBastionProperties(_networkInterface, Name, DefaultProfile.DefaultContext, Port, sshProcess);
-                
-            return sshExitCode;
-            
+            bastionUtils.HandleBastionProperties(_networkInterface);
+            BastionHost bastion = bastionUtils.GetOrCreateDeveloperBastionForVNet();
+            Thread tcpTunnel = bastionUtils.CreateAndStartTunnelThreadToBastion(bastion, localPort);
+
+            return tcpTunnel;
         }
-        
+
+        protected int GetAvailablePort()
+        {
+            int availablePort;
+            using (Socket tempSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                tempSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0)); // Bind to an available port
+                availablePort = ((IPEndPoint)tempSocket.LocalEndPoint).Port;
+            }
+
+            return availablePort;
+        }
         protected internal void UpdateProgressBar(
             ProgressRecord record,
             string statusMessage,

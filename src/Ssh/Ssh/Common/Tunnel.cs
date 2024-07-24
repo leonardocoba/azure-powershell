@@ -15,9 +15,10 @@ using System.Net.Http;
 using System.Collections.Generic;
 using System.Management.Automation;
 using System.ComponentModel;
+using System.Diagnostics;
 
 
-public class TunnelServer
+public class TunnelServer 
 {
     private string _localAddr;
     private int _localPort;
@@ -29,35 +30,36 @@ public class TunnelServer
     private int _remotePort;
     private ClientWebSocket _webSocket;
     private IAzureContext _context;
+    private TcpListener _listener;
 
 
     public TunnelServer(IAzureContext context, int localPort, BastionHost bastion, string bastionEndpoint, string remoteHost, int remotePort)
     {
         _context = context;
         _localAddr = "localhost";  // Local address for TCP listener
-        _localPort = localPort == 0 ? GetAvailablePort() : localPort;  // Automatically select an available port if localPort is 0
-
-        Console.WriteLine($"Assigned local port: {_localPort}");
+        _localPort = localPort;  // Automatically select an available port if localPort is 0
         _bastionEndpoint = bastionEndpoint;  // Bastion endpoint for WebSocket connection
         _remoteHost = remoteHost;  // Remote host to connect to
         _remotePort = remotePort;  // Remote port on the remote hos
-        _remotePort = remotePort;
         _webSocket = new ClientWebSocket();
     }
 
     public async Task StartBastionTunnelAsync()
     {
         IPAddress localIPAddress = Dns.GetHostAddresses(_localAddr)[0];
-        TcpListener listener = new TcpListener(localIPAddress, _localPort);
-        listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        _listener = new TcpListener(localIPAddress, _localPort);
+        _listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
-        listener.Start();
+
+        _listener.Start();
         try
         {
             while (true)
             {
                 // Accepts incoming TCP client connection
-                TcpClient client = await listener.AcceptTcpClientAsync();
+                TcpClient client = await _listener.AcceptTcpClientAsync();
+                Console.WriteLine($"Client connected on local port: {_localPort}");
+
 
                 string authToken = GetAuthTokenAsync();
 
@@ -91,14 +93,21 @@ public class TunnelServer
         }
         finally
         {
-            listener.Stop();
-            _webSocket.Dispose();
+            Cleanup();
         }
 
     }
     public void StartServer()
+
     {
-        StartBastionTunnelAsync().GetAwaiter().GetResult();
+        try
+        {
+            StartBastionTunnelAsync().GetAwaiter().GetResult();
+        }
+        finally
+        {
+            Cleanup();
+        }
     }
 
     private string GetAuthTokenAsync()
@@ -190,7 +199,7 @@ public class TunnelServer
             }
         }
     }
-    private int GetAvailablePort()
+    public int GetAvailablePort()
     {
         int availablePort;
         using (Socket tempSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
@@ -198,6 +207,35 @@ public class TunnelServer
             tempSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0)); // Bind to an available port
             availablePort = ((IPEndPoint)tempSocket.LocalEndPoint).Port;
         }
+
         return availablePort;
     }
+    private void Cleanup()
+    {
+        if (_listener != null)
+        {
+            try
+            {
+                _listener.Stop();
+            }
+            catch (Exception ex)
+            {
+                throw new AzPSCloudException($"Exception during listener cleanup: {ex.Message}");
+            }
+        }
+
+        if (_webSocket != null)
+        {
+            try
+            {
+                _webSocket.Dispose();
+            }
+            catch (Exception ex)
+            {
+                throw new AzPSCloudException($"Exception during WebSocket cleanup: {ex.Message}");
+            }
+        }
+
+    }
+
 }
