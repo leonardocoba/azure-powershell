@@ -16,6 +16,7 @@ using System.Collections.Generic;
 using System.Management.Automation;
 using System.ComponentModel;
 using System.Diagnostics;
+using Microsoft.Azure.Commands.Common.Authentication;
 
 
 public class TunnelServer 
@@ -112,14 +113,21 @@ public class TunnelServer
 
     private string GetAuthTokenAsync()
     {
-        string accessToken= _context.Account.GetAccessToken();
-        
+        IAccessToken accessToken = AzureSession.Instance.AuthenticationFactory.Authenticate(
+                                       _context.Account,
+                                       _context.Environment,
+                                       _context.Tenant?.Id,
+                                       null,
+                                       ShowDialog.Never,
+                                       null
+                                       );
+
         var content = new Dictionary<string, string>
         {
             { "resourceId", _remoteHost },
             { "protocol", "tcptunnel" },
             { "workloadHostPort", _remotePort.ToString() },
-            { "aztoken", accessToken },
+            { "aztoken", accessToken.AccessToken },
             { "token", _lastToken }
         };
 

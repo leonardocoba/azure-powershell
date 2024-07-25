@@ -307,20 +307,19 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         public string GetDataPodEndPoint(BastionHost bastion, string virtualMachineId, int resourcePort)
         {
             IAccessToken accessToken = AzureSession.Instance.AuthenticationFactory.Authenticate(
-                                            _context.Account,
-                                            _context.Environment,
-                                            _context.Tenant?.Id,
-                                            null,
-                                            ShowDialog.Never,
-                                            null,
-                                            null
-                                            ); 
+                                _context.Account,
+                                _context.Environment,
+                                _context.Tenant?.Id,
+                                null,
+                                ShowDialog.Never,
+                                null
+                                );
             var content = new
             {
                 resourceId = virtualMachineId,
                 bastionResourceId = bastion.Id,
                 vmPort = resourcePort,
-                azToken = accessToken,
+                azToken = accessToken.AccessToken,
                 connectionType = "nativeclient"
             };
 
