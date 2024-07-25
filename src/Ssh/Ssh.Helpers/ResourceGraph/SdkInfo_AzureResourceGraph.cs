@@ -5,7 +5,7 @@
 // regenerated.
 // </auto-generated>
 
-namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
+namespace Microsoft.Azure.PowerShell.Ssh.Helpers.ResourceGraph
 {
   using System;
   using System.Collections.Generic;
@@ -13,15 +13,13 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
 
   internal static partial class SdkInfo
   {
-      public static IEnumerable<Tuple<string, string, string>> ApiInfo_NetworkManagementClient
+      public static IEnumerable<Tuple<string, string, string>> ApiInfo_AzureResourceGraph
       {
           get
           {
               return new Tuple<string, string, string>[]
               {
-                new Tuple<string, string, string>("Network", "BastionHosts", "2024-01-01"),
-                new Tuple<string, string, string>("Network", "NetworkInterfaces", "2022-09-01"),
-                new Tuple<string, string, string>("Network", "PublicIPAddresses", "2022-09-01"),
+                new Tuple<string, string, string>("ResourceGraph", "Resources", "2022-10-01"),
               }.AsEnumerable();
           }
       }

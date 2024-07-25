@@ -25,8 +25,9 @@ using System.Threading;
 using System.Text.RegularExpressions;
 using Microsoft.Azure.Commands.Ssh.Properties;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity.Models;
-using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
 
+using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01.Models;
+using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
 namespace Microsoft.Azure.Commands.Ssh
 {
     [Cmdlet(
@@ -62,6 +63,7 @@ namespace Microsoft.Azure.Commands.Ssh
         #region constants
         private const int retryDelayInSec = 10;
         private const int ServiceConfigDelayInSec = 15;
+        private int _localPort;
         #endregion
 
         #region Properties
@@ -89,6 +91,7 @@ namespace Microsoft.Azure.Commands.Ssh
 
             ValidateParameters();
             SetResourceType();
+            
  
             record = new ProgressRecord(0, "Preparing for SSH connection", "Initiating connection setup");
             UpdateProgressBar(record, "Setup SSH connection", 0);
@@ -118,17 +121,31 @@ namespace Microsoft.Azure.Commands.Ssh
                 if (LocalUser == null)
                 {
                     PrepareAadCredentials();
-                }
+               }
                 
-                record.RecordType = ProgressRecordType.Completed;
-                UpdateProgressBar(record, "Ready to start SSH connection.", 100);
+               record.RecordType = ProgressRecordType.Completed;
+               UpdateProgressBar(record, "Ready to start SSH connection.", 100);
 
 
                 int sshStatus = 0;
-                Process sshProcess = CreateSSHProcess();
+                Process sshProcess = null;
+                if (Bastion == null)
+                {
+                    sshProcess = CreateSSHProcess();
+                }
+
                 if (Rdp.IsPresent)
                 {
                     sshStatus = StartRDPConnection(sshProcess);
+                }
+                else if (Bastion != null){
+                    _localPort =  GetAvailablePort();
+                    Thread BastionTCPTunnel = StartBastionConnection(_localPort);
+                    BastionTCPTunnel.Start();
+
+                    sshProcess = CreateSSHProcess();
+                    sshStatus = StartSSHConnection(sshProcess, false);
+
                 }
                 else
                 {
@@ -370,6 +387,7 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 return LocalUser + "@" + Ip;
             }
+            
             throw new AzPSInvalidOperationException("Unable to determine target host.");
         }
 
@@ -419,6 +437,13 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 Array.ForEach(SshArgument, item => argList.Add(item));
             }
+           if (Bastion != null)
+            {
+                argList.Add($"-p {_localPort}");
+                argList.Add("-o StrictHostKeyChecking=no");
+                argList.Add("-o UserKnownHostsFile=/dev/null");
+                argList.Add("-o LogLevel=Error");
+           }
 
             return string.Join(" ", argList.ToArray());
         }

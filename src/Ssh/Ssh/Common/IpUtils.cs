@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // ----------------------------------------------------------------------------------
-
 using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
 using Microsoft.Azure.Commands.Common.Authentication.Abstractions;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.Compute;
@@ -21,7 +20,6 @@ using Microsoft.Azure.PowerShell.Ssh.Helpers.Network;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
 using System.Linq;
 using Microsoft.Rest.Azure;
-
 namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
 {
     internal class IpUtils
@@ -102,16 +100,21 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
         /// <param name="rgName">Resource Group Name</param>
         /// <param name="usePrivateIp">Get a Private IP for the VM.</param>
         /// <param name="message">Hint message when public IP is not available</param>
-        /// <returns>string containing the ip address</returns>
-        public string GetIpAddress(
+        /// <param name="bastion">Bastion Flag</param>
+        /// <returns>string containing the ip address and network interface</returns>
+        public (string IpAddress, NetworkInterface Nic, bool foundPublicIp) GetIpAddress(
             string vmName, 
             string rgName,
             bool usePrivateIp,
+            bool bastion,
             out string message)
         {
             string _firstPrivateIp = null;
             string _firstPublicIp = null;
+            bool foundPublicIp = false;
             message = "";
+            NetworkInterface nic = null;
+
 
             var result = this.VirtualMachineClient.GetWithHttpMessagesAsync(
                 rgName, vmName).GetAwaiter().GetResult();
@@ -120,8 +123,6 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
             foreach (var nicReference in vm.NetworkProfile.NetworkInterfaces)
             {
                 ResourceIdentifier parsedNicId = new ResourceIdentifier(nicReference.Id);
-                NetworkInterface nic;
-
                 try
                 {
                     nic = this.NetworkInterfacesClient.GetWithHttpMessagesAsync(
@@ -132,20 +133,32 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common
                 {
                     continue;
                 }
-
                 if (_firstPrivateIp == null) { _firstPrivateIp = GetFirstPrivateIp(nic); }
-                if (usePrivateIp && _firstPrivateIp != null) { return _firstPrivateIp; }
-                if (!usePrivateIp && _firstPublicIp == null) { _firstPublicIp = GetFirstPublicIp(nic); }
-                if (!usePrivateIp && _firstPublicIp != null) { return _firstPublicIp; }
+                if (usePrivateIp && _firstPrivateIp != null)
+                {
+                    return (_firstPrivateIp, nic, foundPublicIp);
+                }
+                if (!usePrivateIp && _firstPublicIp == null)
+                {
+                    _firstPublicIp = GetFirstPublicIp(nic);
+                }
+                if (!usePrivateIp && _firstPublicIp != null)
+                {
+                    foundPublicIp = true;
+                    return (_firstPublicIp, nic, foundPublicIp);
+                }
+               
             }
 
-            if (!usePrivateIp && _firstPrivateIp != null) 
+             
+
+            if (!usePrivateIp && _firstPrivateIp != null)
             {
-                message = $"Unable to find public IP. Attempting to connect to private ip {_firstPrivateIp}";
-                return _firstPrivateIp;
+                message = $"Unable to find public IP. Attempting to connect to private IP {_firstPrivateIp}";
+                return (_firstPrivateIp, nic, foundPublicIp);
             }
 
-            return null;
+            return (null, nic, foundPublicIp);
         }
 
         #endregion

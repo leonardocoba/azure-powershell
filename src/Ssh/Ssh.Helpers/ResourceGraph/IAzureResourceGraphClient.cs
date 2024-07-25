@@ -8,21 +8,21 @@
 // regenerated.
 // </auto-generated>
 
-namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
+namespace Microsoft.Azure.PowerShell.Ssh.Helpers.ResourceGraph
 {
     using Microsoft.Rest;
     using Microsoft.Rest.Azure;
     using Models;
     using Newtonsoft.Json;
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Threading;
+    using System.Threading.Tasks;
 
     /// <summary>
-    /// The Microsoft Azure Network management API provides a RESTful set of
-    /// web services that interact with Microsoft Azure Networks service to
-    /// manage your network resources. The API has entities that capture the
-    /// relationship between an end user and the Microsoft Azure Networks
-    /// service.
+    /// Azure Resource Graph API Reference
     /// </summary>
-    public partial interface INetworkManagementClient : System.IDisposable
+    public partial interface IAzureResourceGraphClient : System.IDisposable
     {
         /// <summary>
         /// The base URI of the service.
@@ -45,11 +45,9 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
         ServiceClientCredentials Credentials { get; }
 
         /// <summary>
-        /// The subscription credentials which uniquely identify the Microsoft
-        /// Azure subscription. The subscription ID forms part of the URI for
-        /// every service call.
+        /// Api Version.
         /// </summary>
-        string SubscriptionId { get; set; }
+        string ApiVersion { get; }
 
         /// <summary>
         /// The preferred language for the response.
@@ -71,19 +69,19 @@ namespace Microsoft.Azure.PowerShell.Ssh.Helpers.Network
 
 
         /// <summary>
-        /// Gets the INetworkInterfacesOperations.
+        /// Queries the resources managed by Azure Resource Manager for scopes
+        /// specified in the request.
         /// </summary>
-        INetworkInterfacesOperations NetworkInterfaces { get; }
-
-        /// <summary>
-        /// Gets the IPublicIPAddressesOperations.
-        /// </summary>
-        IPublicIPAddressesOperations PublicIPAddresses { get; }
-
-        /// <summary>
-        /// Gets the IBastionHostsOperations.
-        /// </summary>
-        IBastionHostsOperations BastionHosts { get; }
+        /// <param name='query'>
+        /// Request specifying query and its options.
+        /// </param>
+        /// <param name='customHeaders'>
+        /// The headers that will be added to request.
+        /// </param>
+        /// <param name='cancellationToken'>
+        /// The cancellation token.
+        /// </param>
+        Task<AzureOperationResponse<QueryResponse>> ResourcesWithHttpMessagesAsync(QueryRequest query, Dictionary<string, List<string>> customHeaders = null, CancellationToken cancellationToken = default(CancellationToken));
 
     }
 }

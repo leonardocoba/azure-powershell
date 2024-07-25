@@ -18,10 +18,19 @@ using Microsoft.Azure.Commands.Common.Authentication.Abstractions.Models;
 using Microsoft.Azure.Commands.Common.Exceptions;
 using Microsoft.Azure.Commands.ResourceManager.Common;
 using Microsoft.Azure.Commands.ResourceManager.Common.ArgumentCompleters;
-using Microsoft.Azure.Management.Internal.Resources.Utilities.Models;
-using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
 using Microsoft.Azure.Commands.Ssh.Properties;
+using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01;
+using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01.Models;
+using Microsoft.Azure.Management.Internal.Resources.Utilities.Models;
+using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
+using Microsoft.Azure.PowerShell.Cmdlets.Ssh.Common;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute.Models;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity;
 using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity.Models;
+using Microsoft.Azure.PowerShell.Ssh.Helpers.Network.Models;
+using Microsoft.Rest.Azure;
+using Microsoft.Rest.Azure.OData;
 using Microsoft.WindowsAzure.Commands.Utilities.Common;
 using System;
 using System.Collections.Generic;
@@ -29,20 +38,16 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01;
-using Microsoft.Rest.Azure.OData;
-using Microsoft.Azure.Management.Internal.ResourceManager.Version2018_05_01.Models;
-using Microsoft.Rest.Azure;
-using Microsoft.Azure.PowerShell.Cmdlets.Ssh.AzureClients;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridConnectivity;
-using System.Management.Automation.Runspaces;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute.Models;
-using Microsoft.Azure.PowerShell.Ssh.Helpers.HybridCompute;
+using System.Threading;
+
+
 
 
 namespace Microsoft.Azure.Commands.Ssh
@@ -56,8 +61,9 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal const string InteractiveParameterSet = "Interactive";
         protected internal const string ResourceIdParameterSet = "ResourceId";
         protected internal const string IpAddressParameterSet = "IpAddress";
-
         private const int RelayInfoExpirationInSec = 3600;
+        private const string BastionQuickstartUrl = "https://learn.microsoft.com/azure/bastion/quickstart-developer-sku";
+
         #endregion
 
         #region Fields
@@ -66,6 +72,8 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal string proxyPath;
         protected internal ProgressRecord record;
         protected internal bool createdServiceConfig;
+        internal NetworkInterface _networkInterface;
+
 
         protected internal readonly string[] supportedResourceTypes = {
             "Microsoft.HybridCompute/machines",
@@ -336,12 +344,23 @@ namespace Microsoft.Azure.Commands.Ssh
         [ValidateNotNullOrEmpty]
         public virtual SwitchParameter Rdp { get; set; }
 
+        /// <summary>
+        /// Specifies whether to connect to a VM using a Developer Bastion.
+        /// </summary>
+        [Parameter(ParameterSetName = InteractiveParameterSet)]
+        [Parameter(ParameterSetName = IpAddressParameterSet)]
+        [Parameter(ParameterSetName = ResourceIdParameterSet)]
+        [ValidateNotNullOrEmpty]
+        public SwitchParameter Bastion { get; set; }
+
+
         [Parameter(Mandatory = false)]
         public virtual SwitchParameter PassThru { get; set; }
 
         [Parameter(Mandatory = false, HelpMessage = "When connecting to Arc resources, do not prompt for confirmation before updating the allowed port for SSH connection in the Connection Endpoint to match the target port or to install Az.Ssh.ArcProxy module from the PowerShell Gallery, if needed.")]
         public SwitchParameter Force { get; set; }
 
+       
         #endregion
 
         #region Protected Internal Methods
@@ -434,7 +453,7 @@ namespace Microsoft.Azure.Commands.Ssh
             {
                 if (!types.Contains(ResourceType, StringComparer.CurrentCultureIgnoreCase))
                 {
-                    throw new AzPSResourceNotFoundCloudException(String.Format(Resources.ResourceNotFoundTypeProvided,Name, ResourceType, ResourceGroupName));
+                    throw new AzPSResourceNotFoundCloudException(String.Format(Resources.ResourceNotFoundTypeProvided, Name, ResourceType, ResourceGroupName));
                 }
                 return;
             }
@@ -450,6 +469,29 @@ namespace Microsoft.Azure.Commands.Ssh
             ResourceType = types.ElementAt(0);
         }
 
+        protected Thread StartBastionConnection( int localPort)
+           
+        {
+           
+            BastionUtils bastionUtils = new BastionUtils(DefaultProfile.DefaultContext);
+            bastionUtils.HandleBastionProperties(_networkInterface);
+            BastionHost bastion = bastionUtils.GetOrCreateDeveloperBastionForVNet();
+            Thread tcpTunnel = bastionUtils.CreateAndStartTunnelThreadToBastion(bastion, localPort);
+
+            return tcpTunnel;
+        }
+
+        protected int GetAvailablePort()
+        {
+            int availablePort;
+            using (Socket tempSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            {
+                tempSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0)); // Bind to an available port
+                availablePort = ((IPEndPoint)tempSocket.LocalEndPoint).Port;
+            }
+
+            return availablePort;
+        }
         protected internal void UpdateProgressBar(
             ProgressRecord record,
             string statusMessage,
@@ -550,16 +592,44 @@ namespace Microsoft.Azure.Commands.Ssh
         protected internal void GetVmIpAddress()
         {
             string _message = "";
-            Ip = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp, out _message);
+           
+            (string IpAddress, NetworkInterface networkInterface, bool foundPublicIp) = this.IpUtils.GetIpAddress(Name, ResourceGroupName, UsePrivateIp, Bastion, out _message);
 
-            if (_message.StartsWith("Unable to find public IP.") && !UsePrivateIp)
+            Ip = IpAddress;
+            _networkInterface = networkInterface;
+
+
+            if (!foundPublicIp && !UsePrivateIp && !Bastion)
+            {   
+                string query = ("There is no public IP associated with this VM."
+                 + " Would you like to connect to your VM through Developer Bastion? To learn more,"
+                + $" please visit {BastionQuickstartUrl}");
+                string caption = "Create Developer Bastion";
+
+                if (ShouldContinue(query, caption))
+                {
+                    Bastion = true;
+                    WriteWarning("To avoid this question, use -Bastion.");
+
+                }
+                else
+                {
+                    WriteWarning($"{_message}. To avoid this message, use -UsePrivateIp.");
+                }
+            }
+
+            if (Bastion == true)
             {
-                WriteWarning($"{_message}. To avoid this message, use -UsePrivateIp.");
+                Ip = "localhost";
+                if (Port != null && Port != "22")
+                {
+                    throw new AzPSArgumentException("Invalid Port number. The Bastion Developer Sku does not allow for custom port numbers. Please use Port 22.", Port);
+                }
             }
 
             if (Ip == null)
             {
-                string errorMessage = $"Couldn't determine the IP address of {Name} in the Resource Group {ResourceGroupName}.";
+                string errorMessage = $"Couldn't determine the IP address of {Name} in the Resource Group {ResourceGroupName} and Bastion Host was not created.";
                 throw new AzPSResourceNotFoundCloudException(errorMessage);
             }
         }
@@ -752,7 +822,9 @@ namespace Microsoft.Azure.Commands.Ssh
 
             // Need to come back to these messages
             if (!Force && !ShouldContinue(query, String.Format("Allow SSH connection to port {0}", port)))
+                
             {
+                
                 throw new AzPSApplicationException(String.Format(Resources.ServiceConfigCreateConfirmationDenied, port));
             }
 
