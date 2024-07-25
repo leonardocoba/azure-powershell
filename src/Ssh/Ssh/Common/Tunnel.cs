@@ -59,7 +59,6 @@ public class TunnelServer
             {
                 // Accepts incoming TCP client connection
                 TcpClient client = await _listener.AcceptTcpClientAsync();
-                Console.WriteLine($"Client connected on local port: {_localPort}");
 
 
                 string authToken = GetAuthTokenAsync();
